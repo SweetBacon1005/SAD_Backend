@@ -1,5 +1,8 @@
+import { Public } from '@/common/decorators/public.decorator';
+import { Roles } from '@/common/decorators/role.decorator';
 import { Body, Controller, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth } from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -10,9 +13,6 @@ import {
   SendPasswordResetOtpDto,
   VerifyPasswordResetOtpDto,
 } from './dto/verify-reset-password-otp.dto';
-import { Public } from '@/common/decorator/public.decorator';
-import { Roles } from '@/common/decorator/role.decorator';
-import { UserRole } from '@/common/enum/role.enum';
 
 @Controller('auth')
 @ApiBearerAuth()

@@ -8,7 +8,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { config } from 'dotenv';
 import { AuthModule } from './auth/auth.module';
 import { AuthService } from './auth/auth.service';
-import { RolesGuard } from './common/guard/role.guard';
+import { RolesGuard } from './common/guards/role.guard';
 import { PrismaModule } from './database/prisma.module';
 import { MailService } from './mail/mail.service';
 import { AuthGuard } from './auth/guard/auth.guard';
@@ -42,6 +42,10 @@ config();
   ],
   providers: [
     {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
+    {
       provide: APP_INTERCEPTOR,
       useClass: CacheInterceptor,
     },
@@ -52,10 +56,6 @@ config();
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: AuthGuard,
     },
   ],
 })

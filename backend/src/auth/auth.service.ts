@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { FRONTEND_URL, OTP_EXPIRATION_MINUTES } from '../common/constant';
+import { FRONTEND_URL, OTP_EXPIRATION_MINUTES } from '../common/constants';
 import { PrismaService } from '../database/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
