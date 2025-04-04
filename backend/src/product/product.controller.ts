@@ -1,82 +1,157 @@
+import { Public } from '@/common/decorators/public.decorator';
 import {
   Body,
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
+  NotFoundException,
   Param,
   Post,
   Put,
-  Query,
 } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { Roles } from '../common/decorators/role.decorator';
 import { CreateProductDto, UpdateProductDto } from './dto/create-product.dto';
+import { GetAllProductsResponseDto } from './dto/get-all-products-response.dto';
+import { GetAllProductsDto } from './dto/get-products.dto';
+import {
+  ProductDetailResponseDto,
+  ProductResponseDto,
+} from './dto/product-response.dto';
+import { SearchProductResponseDto } from './dto/search-product-response.dto';
+import { SearchProductDto } from './dto/search-product.dto';
 import { ProductService } from './product.service';
 
+@ApiTags('products')
 @Controller('products')
+@ApiBearerAuth()
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
-  // Create a new product (Admin/Manager only)
+  @Post('all')
+  @Public()
+  @ApiOperation({ summary: 'Lấy danh sách sản phẩm có phân trang và lọc' })
+  @ApiOkResponse({
+    description: 'Danh sách sản phẩm và thông tin phân trang',
+    type: GetAllProductsResponseDto,
+  })
+  async getAllProducts(
+    @Body() payload: GetAllProductsDto,
+  ): Promise<GetAllProductsResponseDto> {
+    return this.productService.getAllProducts(payload);
+  }
+
+  @Post('search')
+  @Public()
+  @ApiOperation({ summary: 'Tìm kiếm sản phẩm theo từ khóa' })
+  @ApiOkResponse({
+    description: 'Kết quả tìm kiếm sản phẩm',
+    type: SearchProductResponseDto,
+  })
+  async searchProducts(
+    @Body() payload: SearchProductDto,
+  ): Promise<SearchProductResponseDto> {
+    return this.productService.searchProducts(payload);
+  }
+
   @Post()
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
-  async createProduct(@Body() createProductDto: CreateProductDto) {
-    return this.productService.createProduct(createProductDto);
+  @ApiOperation({ summary: 'Tạo sản phẩm mới (Admin/Manager)' })
+  @ApiCreatedResponse({
+    description: 'Sản phẩm đã được tạo thành công',
+    type: ProductResponseDto,
+  })
+  async createProduct(
+    @Body() payload: CreateProductDto,
+  ): Promise<ProductResponseDto> {
+    return this.productService.createProduct(payload);
   }
 
-  // Get all products (Public)
-  @Get()
-  async getAllProducts(
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-    @Query('categoryIds') categoryIds?: string,
-    @Query('minPrice') minPrice?: number,
-    @Query('maxPrice') maxPrice?: number,
-  ) {
-    const categoryIdArray = categoryIds ? categoryIds.split(',') : undefined;
-    return this.productService.getAllProducts(page, limit, {
-      categoryIds: categoryIdArray,
-      minPrice,
-      maxPrice,
-    });
-  }
-
-  // Search products (Public)
-  @Get('search')
-  async searchProducts(
-    @Query('query') query: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-  ) {
-    return this.productService.searchProducts(query, page, limit);
-  }
-
-  // Get product by ID (Public)
   @Get(':id')
-  async getProductById(@Param('id') id: string) {
-    return this.productService.getProductById(id);
+  @Public()
+  @ApiOperation({ summary: 'Lấy thông tin sản phẩm theo ID' })
+  @ApiParam({ name: 'id', description: 'ID sản phẩm' })
+  @ApiOkResponse({
+    description: 'Thông tin chi tiết sản phẩm',
+    type: ProductDetailResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Không tìm thấy sản phẩm',
+  })
+  async getProductById(
+    @Param('id') id: string,
+  ): Promise<ProductDetailResponseDto> {
+    const product = await this.productService.getProductById(id);
+    if (!product) {
+      throw new NotFoundException(`Không tìm thấy sản phẩm với ID ${id}`);
+    }
+    return product;
   }
 
-  // Get product by slug (Public)
   @Get('slug/:slug')
-  async getProductBySlug(@Param('slug') slug: string) {
-    return this.productService.getProductBySlug(slug);
+  @Public()
+  @ApiOperation({ summary: 'Lấy thông tin sản phẩm theo slug' })
+  @ApiParam({ name: 'slug', description: 'Slug sản phẩm' })
+  @ApiOkResponse({
+    description: 'Thông tin chi tiết sản phẩm',
+    type: ProductDetailResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Không tìm thấy sản phẩm',
+  })
+  async getProductBySlug(
+    @Param('slug') slug: string,
+  ): Promise<ProductDetailResponseDto> {
+    const product = await this.productService.getProductBySlug(slug);
+    if (!product) {
+      throw new NotFoundException(`Không tìm thấy sản phẩm với slug ${slug}`);
+    }
+    return product;
   }
 
-  // Update a product (Admin/Manager only)
   @Put(':id')
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Cập nhật sản phẩm (Admin/Manager)' })
+  @ApiParam({ name: 'id', description: 'ID sản phẩm cần cập nhật' })
+  @ApiOkResponse({
+    description: 'Sản phẩm đã được cập nhật thành công',
+    type: ProductResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Không tìm thấy sản phẩm',
+  })
   async updateProduct(
     @Param('id') id: string,
     @Body() updateProductDto: UpdateProductDto,
-  ) {
+  ): Promise<ProductResponseDto> {
     return this.productService.updateProduct(id, updateProductDto);
   }
 
-  // Delete a product (Admin/Manager only)
   @Delete(':id')
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
-  async deleteProduct(@Param('id') id: string) {
-    return this.productService.deleteProduct(id);
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Xóa sản phẩm (Admin/Manager)' })
+  @ApiParam({ name: 'id', description: 'ID sản phẩm cần xóa' })
+  @ApiOkResponse({ description: 'Sản phẩm đã được xóa thành công' })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Không tìm thấy sản phẩm',
+  })
+  async deleteProduct(@Param('id') id: string): Promise<void> {
+    await this.productService.deleteProduct(id);
   }
 }

@@ -7,11 +7,16 @@ import { PassportModule } from '@nestjs/passport';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { config } from 'dotenv';
 import { AuthModule } from './auth/auth.module';
-import { AuthService } from './auth/auth.service';
+import { AuthGuard } from './auth/guard/auth.guard';
+import { CartModule } from './cart/cart.module';
 import { RolesGuard } from './common/guards/role.guard';
 import { PrismaModule } from './database/prisma.module';
-import { MailService } from './mail/mail.service';
-import { AuthGuard } from './auth/guard/auth.guard';
+import { ProductModule } from './product/product.module';
+import { OrderModule } from './order/order.module';
+import { UserModule } from './user/user.module';
+import { ReviewModule } from './review/review.module';
+import { WishlistModule } from './wishlist/wishlist.module';
+import { PaymentModule } from './payment/payment.module';
 config();
 
 @Module({
@@ -25,6 +30,7 @@ config();
         secret: process.env.JWT_SECRET,
         signOptions: { expiresIn: '1d' },
       }),
+      global: true,
     }),
     PrismaModule,
     AuthModule,
@@ -39,6 +45,13 @@ config();
         },
       ],
     }),
+    ProductModule,
+    CartModule,
+    OrderModule,
+    UserModule,
+    ReviewModule,
+    WishlistModule,
+    PaymentModule,
   ],
   providers: [
     {
