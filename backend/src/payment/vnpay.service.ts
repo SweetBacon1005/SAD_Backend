@@ -15,26 +15,44 @@ export class VnpayService {
   private readonly vnpApiVersion: string;
 
   constructor(private configService: ConfigService) {
-    this.vnpUrl = this.configService.get<string>('VNPAY_URL', 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html');
-    this.vnpTmnCode = this.configService.get<string>('VNPAY_TMN_CODE', 'your-tmn-code');
-    this.vnpHashSecret = this.configService.get<string>('VNPAY_HASH_SECRET', 'your-hash-secret');
-    this.vnpApiVersion = this.configService.get<string>('VNPAY_API_VERSION', '2.1.0');
-    this.vnpReturnUrl = this.configService.get<string>('VNPAY_RETURN_URL', 'http://localhost:3000/payment/vnpay-return');
+    this.vnpUrl = this.configService.get<string>(
+      'VNPAY_URL',
+      'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html',
+    );
+    this.vnpTmnCode = this.configService.get<string>(
+      'VNPAY_TMN_CODE',
+      'your-tmn-code',
+    );
+    this.vnpHashSecret = this.configService.get<string>(
+      'VNPAY_HASH_SECRET',
+      'your-hash-secret',
+    );
+    this.vnpApiVersion = this.configService.get<string>(
+      'VNPAY_API_VERSION',
+      '2.1.0',
+    );
+    this.vnpReturnUrl = this.configService.get<string>(
+      'VNPAY_RETURN_URL',
+      'http://localhost:3000/payment/vnpay-return',
+    );
   }
 
   /**
    * Tạo URL thanh toán VNPay
    */
-  async createPaymentUrl(createPaymentDto: CreateVnpayPaymentDto): Promise<string> {
+  async createPaymentUrl(
+    createPaymentDto: CreateVnpayPaymentDto,
+  ): Promise<string> {
     const date = new Date();
     const createDate = this.formatDate(date);
-    
+
     const orderId = createPaymentDto.orderId;
     const amount = createPaymentDto.amount;
-    const orderInfo = createPaymentDto.orderInfo || `Thanh toán cho đơn hàng #${orderId}`;
+    const orderInfo =
+      createPaymentDto.orderInfo || `Thanh toán cho đơn hàng #${orderId}`;
     const orderType = createPaymentDto.orderType || '190000'; // Mặc định là thanh toán hóa đơn
     const locale = createPaymentDto.locale || 'vn';
-    
+
     // Tạo các tham số gửi cho VNPay
     const params = {
       vnp_Version: this.vnpApiVersion,
@@ -53,18 +71,20 @@ export class VnpayService {
 
     // Sắp xếp các tham số theo thứ tự a-z
     const sortedParams = this.sortObject(params);
-    
+
     // Tạo chuỗi hash để xác thực
-    const signData = querystring.stringify(sortedParams, undefined, undefined, { encodeURIComponent: (str) => str });
+    const signData = querystring.stringify(sortedParams, undefined, undefined, {
+      encodeURIComponent: (str) => str,
+    });
     const hmac = crypto.createHmac('sha512', this.vnpHashSecret);
     const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-    
+
     // Thêm chữ ký vào tham số
     sortedParams['vnp_SecureHash'] = signed;
 
     // Tạo URL thanh toán
     const paymentUrl = `${this.vnpUrl}?${querystring.stringify(sortedParams, undefined, undefined, { encodeURIComponent: (str) => str })}`;
-    
+
     return paymentUrl;
   }
 
@@ -73,26 +93,28 @@ export class VnpayService {
    */
   verifyReturnUrl(vnpParams: any): VnpayPaymentResponseDto {
     const secureHash = vnpParams['vnp_SecureHash'];
-    
+
     // Xóa chữ ký để tạo lại chuỗi hash
     delete vnpParams['vnp_SecureHash'];
     delete vnpParams['vnp_SecureHashType'];
-    
+
     // Sắp xếp các tham số theo thứ tự a-z
     const sortedParams = this.sortObject(vnpParams);
-    
+
     // Tạo chuỗi hash để xác thực
-    const signData = querystring.stringify(sortedParams, undefined, undefined, { encodeURIComponent: (str) => str });
+    const signData = querystring.stringify(sortedParams, undefined, undefined, {
+      encodeURIComponent: (str) => str,
+    });
     const hmac = crypto.createHmac('sha512', this.vnpHashSecret);
     const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-    
+
     // Kiểm tra chữ ký
     const isValidSignature = secureHash === signed;
-    
+
     // Lấy kết quả thanh toán
     const responseCode = vnpParams['vnp_ResponseCode'];
     const isSuccess = responseCode === '00';
-    
+
     // Trả về thông tin thanh toán
     return {
       isSuccess,
@@ -135,7 +157,7 @@ export class VnpayService {
       '79': 'Giao dịch không thành công do: KH nhập sai mật khẩu thanh toán nhiều lần',
       '99': 'Lỗi không xác định',
     };
-    
+
     return responseMessages[responseCode] || 'Lỗi không xác định';
   }
 
@@ -149,7 +171,7 @@ export class VnpayService {
     const hour = date.getHours().toString().padStart(2, '0');
     const minute = date.getMinutes().toString().padStart(2, '0');
     const second = date.getSeconds().toString().padStart(2, '0');
-    
+
     return `${year}${month}${day}${hour}${minute}${second}`;
   }
 
@@ -158,23 +180,23 @@ export class VnpayService {
    */
   private sortObject(obj: any): any {
     const sorted: any = {};
-    const keys = [];
-    
+    const keys: string[] = [];
+
     for (const key in obj) {
       if (obj.hasOwnProperty(key)) {
         keys.push(key);
       }
     }
-    
+
     keys.sort();
-    
+
     for (const i in keys) {
       if (keys.hasOwnProperty(i)) {
         const key = keys[i];
         sorted[key] = obj[key];
       }
     }
-    
+
     return sorted;
   }
-} 
+}

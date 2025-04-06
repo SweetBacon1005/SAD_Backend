@@ -247,30 +247,30 @@ export class AuthService {
   }
 
   async resetPassword(payload: ResetPasswordDto): Promise<void> {
-    const { newPassword, token } = payload;
+    const { email, otp, password } = payload;
 
-    try {
-      const { email } = this.jwtService.verify(token);
+    const user = await this.prisma.user.findFirst({
+      where: {
+        email: email.toLowerCase(),
+        passwordResetOTP: otp,
+        passwordResetOTPExpires: { gt: new Date() },
+      },
+    });
 
-      const user = await this.prisma.user.findUnique({
-        where: { email: email.toLowerCase() },
-      });
-
-      if (!user) {
-        throw new BadRequestException('User not found');
-      }
-
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          password: hashedPassword,
-        },
-      });
-    } catch (error) {
-      throw new UnauthorizedException('Invalid or expired token');
+    if (!user) {
+      throw new BadRequestException('Invalid or expired OTP');
     }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        passwordResetOTP: null,
+        passwordResetOTPExpires: null,
+      },
+    });
   }
 
   private generateJwtToken(user: {
@@ -279,7 +279,7 @@ export class AuthService {
     role: string;
   }): string {
     const payload = {
-      sub: user.id,
+      id: user.id,
       email: user.email,
       role: user.role,
     };

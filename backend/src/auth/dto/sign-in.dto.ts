@@ -1,26 +1,20 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 
 export class SignInDto {
-  @IsEmail()
-  @IsNotEmpty()
   @ApiProperty({
-    example: "trungdz10052003@gmail.com"
+    description: 'Email đăng nhập',
+    example: 'user@example.com',
   })
+  @IsEmail({}, { message: 'Email không đúng định dạng' })
+  @IsNotEmpty({ message: 'Email không được để trống' })
   email: string;
 
-  @IsString()
-  @MinLength(8)
-  @MaxLength(20)
-  @Matches(
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
-    {
-      message:
-        'Password must contain at least one uppercase, one lowercase, one number and one special character',
-    },
-  )
   @ApiProperty({
+    description: 'Mật khẩu đăng nhập',
     example: 'Password@123',
   })
+  @IsString({ message: 'Mật khẩu phải là chuỗi' })
+  @IsNotEmpty({ message: 'Mật khẩu không được để trống' })
   password: string;
 }

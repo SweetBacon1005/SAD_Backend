@@ -52,12 +52,28 @@ export class ShippingInfoDto {
 }
 
 export class OrderItemDto {
+  @ApiPropertyOptional({
+    description: 'ID của item trong giỏ hàng',
+    example: '6151f3d2e149e32b3404c8c3',
+  })
+  @IsOptional()
+  @IsString()
+  cartItemId?: string;
+
   @ApiProperty({
     description: 'ID sản phẩm',
     example: '6151f3d2e149e32b3404c8b5',
   })
   @IsString()
   productId: string;
+
+  @ApiPropertyOptional({
+    description: 'ID biến thể sản phẩm (nếu có)',
+    example: '6151f3d2e149e32b3404c8c7',
+  })
+  @IsOptional()
+  @IsString()
+  variantId?: string;
 
   @ApiProperty({ description: 'Số lượng đặt hàng', minimum: 1, example: 2 })
   @IsInt()

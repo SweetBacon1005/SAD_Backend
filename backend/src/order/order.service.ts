@@ -1,56 +1,197 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { OrderStatus, PaymentStatus } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import {
+  CancelOrderResponseDto,
+  OrderResponseDto,
+  OrderStatusResponseDto,
+  PaymentStatusResponseDto,
+} from './dto/order-response.dto';
 import { CreateOrderDto } from './dto/order.dto';
-import { CancelOrderResponseDto, OrderResponseDto, OrderStatusResponseDto, PaymentStatusResponseDto } from './dto/order-response.dto';
+import { PagedResponseDto, PaginationDto } from './dto/pagination.dto';
+
+// Định nghĩa interface ProductVariant
+interface ProductVariant {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  attributes: any;
+  productId: string;
+  createdAt: Date;
+  updatedAt: Date | null;
+  description: string;
+  costPrice: number;
+  images: string[];
+}
+
+// Định nghĩa interface Product
+interface Product {
+  id: string;
+  name: string;
+  basePrice?: number;
+  quantity?: number;
+  variants: ProductVariant[];
+}
 
 @Injectable()
 export class OrderService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createOrder(userId: string, createOrderDto: CreateOrderDto): Promise<OrderResponseDto> {
+  async createOrder(
+    userId: string,
+    payload: CreateOrderDto,
+  ): Promise<OrderResponseDto> {
     const orderNumber = this.generateOrderNumber();
 
     return this.prisma.$transaction(async (prisma) => {
+      // Lấy thông tin giỏ hàng
+      const cart = await prisma.cart.findUnique({
+        where: { userId },
+        include: {
+          items: {
+            include: {
+              product: {
+                include: {
+                  variants: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const cartItemsMap = cart ? new Map(cart.items.map((item) => [item.id, item])) : new Map();
+
+      // Xử lý các sản phẩm từ giỏ hàng hoặc productId/variantId
       const productsToCheck = await Promise.all(
-        createOrderDto.items.map(async (item) => {
-          const product = await prisma.product.findUnique({
-            where: { id: item.productId },
-            include: { variants: true },
-          });
+        payload.items.map(async (item) => {
+          // Trường hợp 1: Có cartItemId
+          if (item.cartItemId && cartItemsMap.size > 0) {
+            const cartItem = cartItemsMap.get(item.cartItemId);
+            if (!cartItem) {
+              throw new NotFoundException(
+                `Không tìm thấy sản phẩm với ID ${item.cartItemId} trong giỏ hàng`,
+              );
+            }
 
-          if (!product) {
-            throw new NotFoundException(
-              `Product with ID ${item.productId} not found`,
-            );
+            const product = cartItem.product;
+            let selectedVariant: ProductVariant | null = null;
+            
+            if (cartItem.variantId) {
+              selectedVariant =
+                product.variants.find((v) => v.id === cartItem.variantId) ||
+                null;
+
+              if (!selectedVariant) {
+                throw new NotFoundException(
+                  `Không tìm thấy biến thể với ID ${cartItem.variantId} cho sản phẩm ${product.name}`,
+                );
+              }
+
+              if (selectedVariant.quantity < item.quantity) {
+                throw new BadRequestException(
+                  `Số lượng biến thể ${selectedVariant.name} của sản phẩm ${product.name} không đủ. Hiện có: ${selectedVariant.quantity}, Yêu cầu: ${item.quantity}`,
+                );
+              }
+            } else if (
+              (product as any).quantity &&
+              (product as any).quantity < item.quantity
+            ) {
+              throw new BadRequestException(
+                `Số lượng sản phẩm ${product.name} không đủ. Hiện có: ${(product as any).quantity}, Yêu cầu: ${item.quantity}`,
+              );
+            }
+
+            return {
+              product,
+              cartItem,
+              requestedQty: item.quantity,
+              selectedVariant,
+            };
+          } 
+          // Trường hợp 2: Chỉ có productId và variantId (tùy chọn)
+          else {
+            const product = await prisma.product.findUnique({
+              where: { id: item.productId },
+              include: { variants: true },
+            });
+
+            if (!product) {
+              throw new NotFoundException(
+                `Không tìm thấy sản phẩm với ID ${item.productId}`,
+              );
+            }
+
+            let selectedVariant: ProductVariant | null = null;
+            if (item.variantId) {
+              selectedVariant =
+                product.variants.find((v) => v.id === item.variantId) || null;
+                
+              if (!selectedVariant) {
+                throw new NotFoundException(
+                  `Không tìm thấy biến thể với ID ${item.variantId} cho sản phẩm ${item.productId}`,
+                );
+              }
+
+              if (selectedVariant.quantity < item.quantity) {
+                throw new BadRequestException(
+                  `Số lượng biến thể ${selectedVariant.name} của sản phẩm ${product.name} không đủ. Hiện có: ${selectedVariant.quantity}, Yêu cầu: ${item.quantity}`,
+                );
+              }
+            } else if (
+              (product as any).quantity &&
+              (product as any).quantity < item.quantity
+            ) {
+              throw new BadRequestException(
+                `Số lượng sản phẩm ${product.name} không đủ. Hiện có: ${(product as any).quantity}, Yêu cầu: ${item.quantity}`,
+              );
+            }
+
+            return {
+              product,
+              requestedQty: item.quantity,
+              selectedVariant,
+            };
           }
-
-          return { product, requestedQty: item.quantity };
         }),
       );
 
-      if (productsToCheck.some((p) => p.product.variants.length > 0)) {
-        throw new ConflictException('Product variants are not supported yet');
-      }
-
-      // Calculate subtotal and total
+      // Tính subtotal và total
       let subtotal = 0;
-      const orderItems = createOrderDto.items.map((item) => {
-        const product = productsToCheck.find(
-          (p) => p.product.id === item.productId,
-        )?.product;
-        const price = product?.basePrice || 0;
+      const orderItems = payload.items.map((item) => {
+        const productInfo = productsToCheck.find((p) => {
+          if (item.cartItemId) {
+            return p.cartItem?.id === item.cartItemId;
+          }
+          return p.product.id === item.productId;
+        });
+
+        const product = productInfo?.product;
+        const selectedVariant = productInfo?.selectedVariant;
+        const cartItem = productInfo?.cartItem;
+
+        let price;
+        if (cartItem) {
+          price = cartItem.selectedPrice;
+        } else {
+          price = selectedVariant
+            ? selectedVariant.price
+            : product?.basePrice || 0;
+        }
+
         subtotal += price * item.quantity;
 
         return {
-          productId: item.productId,
+          productId: product?.id || '',
+          variantId: selectedVariant?.id,
           quantity: item.quantity,
           price: price,
+          attributes: selectedVariant?.attributes || null,
         };
       });
 
@@ -60,8 +201,8 @@ export class OrderService {
       // Create shipping info
       const shippingInfo = await prisma.shippingInfo.create({
         data: {
-          addressLine: createOrderDto.shippingInfo.addressLine,
-          phone: createOrderDto.shippingInfo.phone,
+          addressLine: payload.shippingInfo.addressLine,
+          phone: payload.shippingInfo.phone,
         },
       });
 
@@ -73,8 +214,8 @@ export class OrderService {
           total,
           status: OrderStatus.PENDING,
           paymentStatus: PaymentStatus.PENDING,
-          paymentMethod: createOrderDto.paymentMethod,
-          notes: createOrderDto.notes,
+          paymentMethod: payload.paymentMethod,
+          notes: payload.notes,
           shippingInfoId: shippingInfo.id,
           items: {
             create: orderItems,
@@ -82,7 +223,7 @@ export class OrderService {
           payment: {
             create: {
               status: PaymentStatus.PENDING,
-              method: createOrderDto.paymentMethod,
+              method: payload.paymentMethod,
               amount: total,
             },
           },
@@ -98,14 +239,57 @@ export class OrderService {
         },
       });
 
-      // Clear the user's cart after successful order creation
-      const cart = await prisma.cart.findUnique({
-        where: { userId },
-      });
+      // Cập nhật số lượng tồn kho sau khi tạo đơn hàng
+      await Promise.all(
+        payload.items.map(async (item) => {
+          const productInfo = productsToCheck.find((p) => {
+            if (item.cartItemId) {
+              return p.cartItem?.id === item.cartItemId;
+            }
+            return p.product.id === item.productId;
+          });
 
-      if (cart) {
+          const selectedVariant = productInfo?.selectedVariant;
+
+          if (selectedVariant) {
+            await prisma.productVariant.update({
+              where: { id: selectedVariant.id },
+              data: {
+                quantity: { decrement: item.quantity },
+              },
+            });
+          } else {
+            // Cập nhật số lượng tồn kho của sản phẩm nếu không có variant
+            const product = productInfo?.product as any;
+            if (
+              product &&
+              product.quantity !== undefined &&
+              product.quantity !== null
+            ) {
+              await prisma.product.update({
+                where: { id: product.id },
+                data: {
+                  // Cập nhật quantity nếu có trong model
+                },
+              });
+            }
+          }
+        }),
+      );
+
+      // Xóa các sản phẩm đã đặt hàng khỏi giỏ hàng nếu có cartItemId
+      const cartItemsToRemove = payload.items
+        .filter((item) => item.cartItemId)
+        .map((item) => item.cartItemId)
+        .filter((id): id is string => id !== undefined);
+
+      if (cartItemsToRemove.length > 0) {
         await prisma.cartItem.deleteMany({
-          where: { cartId: cart.id },
+          where: {
+            id: {
+              in: cartItemsToRemove,
+            },
+          },
         });
       }
 
@@ -113,50 +297,84 @@ export class OrderService {
     });
   }
 
-  async getAllOrders(): Promise<OrderResponseDto[]> {
-    const orders = await this.prisma.order.findMany({
-      include: {
-        items: {
-          include: {
-            product: true,
+  async getAllOrders(pagination: PaginationDto = { currentPage: 1, pageSize: 10 }): Promise<PagedResponseDto<OrderResponseDto>> {
+    const page = pagination.currentPage || 1;
+    const limit = pagination.pageSize || 10;
+    const skip = (page - 1) * limit;
+
+    const [orders, totalItems] = await Promise.all([
+      this.prisma.order.findMany({
+        include: {
+          items: {
+            include: {
+              product: true,
+            },
+          },
+          shippingInfo: true,
+          payment: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
         },
-        shippingInfo: true,
-        payment: true,
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
+        orderBy: {
+          createdAt: 'desc',
         },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-    
-    return orders as unknown as OrderResponseDto[];
+        skip,
+        take: limit,
+      }),
+      this.prisma.order.count(),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data: orders as unknown as OrderResponseDto[],
+      currentPage: page,
+      totalPages,
+      total: totalItems,
+    };
   }
 
-  async getUserOrders(userId: string): Promise<OrderResponseDto[]> {
-    const orders = await this.prisma.order.findMany({
-      where: { userId },
-      include: {
-        items: {
-          include: {
-            product: true,
+  async getUserOrders(userId: string, pagination: PaginationDto = { currentPage: 1, pageSize: 10 }): Promise<PagedResponseDto<OrderResponseDto>> {
+    const page = pagination.currentPage || 1;
+    const limit = pagination.pageSize || 10;
+    const skip = (page - 1) * limit;
+
+    const [orders, totalItems] = await Promise.all([
+      this.prisma.order.findMany({
+        where: { userId },
+        include: {
+          items: {
+            include: {
+              product: true,
+            },
           },
+          shippingInfo: true,
+          payment: true,
         },
-        shippingInfo: true,
-        payment: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-    
-    return orders as unknown as OrderResponseDto[];
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip,
+        take: limit,
+      }),
+      this.prisma.order.count({
+        where: { userId },
+      }),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data: orders as unknown as OrderResponseDto[],
+      currentPage: page,
+      totalPages,
+      total: totalItems,
+    };
   }
 
   async getOrderById(id: string, userId: string): Promise<OrderResponseDto> {
@@ -187,8 +405,16 @@ export class OrderService {
     return order as unknown as OrderResponseDto;
   }
 
-  async updateOrderStatus(id: string, status: OrderStatus): Promise<OrderStatusResponseDto> {
-    const order = await this.prisma.order.findUnique({ where: { id } });
+  async updateOrderStatus(
+    id: string,
+    status: OrderStatus,
+  ): Promise<OrderStatusResponseDto> {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: {
+        items: true,
+      },
+    });
 
     if (!order) {
       throw new NotFoundException('Order not found');
@@ -279,28 +505,55 @@ export class OrderService {
   }
 
   async cancelOrder(id: string): Promise<CancelOrderResponseDto> {
-    const order = await this.prisma.order.findUnique({ where: { id } });
+    return this.prisma.$transaction(async (prisma) => {
+      const order = await prisma.order.findUnique({
+        where: { id },
+        include: {
+          items: true,
+        },
+      });
 
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
 
-    // Cannot cancel orders that are already delivered
-    if (order.status === OrderStatus.DELIVERED) {
-      throw new BadRequestException('Cannot cancel delivered orders');
-    }
+      // Cannot cancel orders that are already delivered
+      if (order.status === OrderStatus.DELIVERED) {
+        throw new BadRequestException('Cannot cancel delivered orders');
+      }
 
-    // Update order status to CANCELLED
-    const updatedOrder = await this.prisma.order.update({
-      where: { id },
-      data: { status: OrderStatus.CANCELLED },
+      // Update order status to CANCELLED
+      const updatedOrder = await prisma.order.update({
+        where: { id },
+        data: { status: OrderStatus.CANCELLED },
+      });
+
+      // Hoàn trả số lượng tồn kho cho các variant
+      await Promise.all(
+        order.items.map(async (item) => {
+          if (item.variantId) {
+            const variant = await prisma.productVariant.findUnique({
+              where: { id: item.variantId },
+            });
+
+            if (variant) {
+              await prisma.productVariant.update({
+                where: { id: item.variantId },
+                data: {
+                  quantity: variant.quantity + item.quantity,
+                },
+              });
+            }
+          }
+        }),
+      );
+
+      return {
+        id: updatedOrder.id,
+        status: updatedOrder.status,
+        updatedAt: updatedOrder.updatedAt,
+      };
     });
-
-    return {
-      id: updatedOrder.id,
-      status: updatedOrder.status,
-      updatedAt: updatedOrder.updatedAt,
-    };
   }
 
   private generateOrderNumber(): string {

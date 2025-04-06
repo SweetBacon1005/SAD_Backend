@@ -32,6 +32,9 @@ import {
 import { SearchProductResponseDto } from './dto/search-product-response.dto';
 import { SearchProductDto } from './dto/search-product.dto';
 import { ProductService } from './product.service';
+import { ProductComparisonRequestDto } from './dto/product-comparison.dto';
+import { ProductComparisonResponseDto } from './dto/product-comparison-response.dto';
+import { PriceComparisonRequestDto, PriceComparisonResponseDto } from './dto/price-comparison.dto';
 
 @ApiTags('products')
 @Controller('products')
@@ -153,5 +156,41 @@ export class ProductController {
   })
   async deleteProduct(@Param('id') id: string): Promise<void> {
     await this.productService.deleteProduct(id);
+  }
+
+  @Post('compare')
+  @Public()
+  @ApiOperation({ summary: 'So sánh các sản phẩm' })
+  @ApiOkResponse({
+    description: 'Kết quả so sánh sản phẩm',
+    type: ProductComparisonResponseDto,
+  })
+  async compareProducts(
+    @Body() payload: ProductComparisonRequestDto,
+  ): Promise<ProductComparisonResponseDto> {
+    return this.productService.compareProducts(
+      payload.productIds,
+      payload.currentPage,
+      payload.pageSize,
+    );
+  }
+
+  @Post('price-comparison')
+  @Public()
+  @ApiOperation({ summary: 'So sánh giá sản phẩm ở các cửa hàng khác nhau' })
+  @ApiOkResponse({
+    description: 'Kết quả so sánh giá sản phẩm',
+    type: PriceComparisonResponseDto,
+  })
+  async compareProductPrices(
+    @Body() payload: PriceComparisonRequestDto,
+  ): Promise<PriceComparisonResponseDto> {
+    return this.productService.compareProductPrices(
+      payload.productName,
+      payload.category,
+      payload.inStock,
+      payload.currentPage,
+      payload.pageSize,
+    );
   }
 }
