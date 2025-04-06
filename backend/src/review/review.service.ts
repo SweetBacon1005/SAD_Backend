@@ -1,15 +1,27 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateReviewDto } from './dto/create-review.dto';
-import { UpdateReviewDto } from './dto/update-review.dto';
+import {
+  ReviewFilterDto,
+  ReviewListResponseDto,
+  ReviewSortField,
+  SortOrder,
+} from './dto/pagination-review.dto';
 import { ReviewResponseDto } from './dto/review-response.dto';
+import { UpdateReviewDto } from './dto/update-review.dto';
 
 @Injectable()
 export class ReviewService {
   constructor(private prisma: PrismaService) {}
 
-  async create(userId: string, createReviewDto: CreateReviewDto): Promise<ReviewResponseDto> {
-    // Kiểm tra xem sản phẩm có tồn tại không
+  async create(
+    userId: string,
+    createReviewDto: CreateReviewDto,
+  ): Promise<ReviewResponseDto> {
     const product = await this.prisma.product.findUnique({
       where: { id: createReviewDto.productId },
     });
@@ -18,7 +30,6 @@ export class ReviewService {
       throw new NotFoundException('Sản phẩm không tồn tại');
     }
 
-    // Kiểm tra xem người dùng đã đánh giá sản phẩm này chưa
     const existingReview = await this.prisma.review.findFirst({
       where: {
         userId: userId,
@@ -30,7 +41,6 @@ export class ReviewService {
       throw new ForbiddenException('Bạn đã đánh giá sản phẩm này rồi');
     }
 
-    // Tạo đánh giá mới
     const review = await this.prisma.review.create({
       data: {
         userId: userId,
@@ -53,25 +63,92 @@ export class ReviewService {
     return this.mapToResponseDto(review);
   }
 
-  async findAll(productId?: string): Promise<ReviewResponseDto[]> {
-    const where = productId ? { productId, isPublished: true } : { isPublished: true };
-    
-    const reviews = await this.prisma.review.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
+  async findAll(payload: ReviewFilterDto = {}): Promise<ReviewListResponseDto> {
+    const {
+      productId,
+      rating,
+      sortBy = ReviewSortField.CREATED_AT,
+      sortOrder = SortOrder.DESC,
+    } = payload;
+
+    const currentPage = Number(payload.currentPage);
+    const pageSize = Number(payload.pageSize);
+    const skip = (currentPage - 1) * pageSize;
+
+    // Xây dựng điều kiện where
+    const where: any = { isPublished: true };
+    if (productId) {
+      where.productId = productId;
+    }
+    if (rating) {
+      where.rating = rating;
+    }
+
+    // Thực hiện truy vấn với phân trang
+    const [reviews, totalItems] = await Promise.all([
+      this.prisma.review.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
+          product: true,
         },
-      },
-      orderBy: {
-        createdAt: 'desc',
+        orderBy: {
+          [sortBy]: sortOrder,
+        },
+        skip: (currentPage - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.review.count({ where }),
+    ]);
+
+    // Tính thống kê đánh giá
+    const ratingStatsQuery = await this.prisma.review.groupBy({
+      by: ['rating'],
+      where,
+      _count: {
+        rating: true,
       },
     });
 
-    return reviews.map(review => this.mapToResponseDto(review));
+    // Định dạng kết quả thống kê đánh giá
+    const ratingStats: Record<number, number> = {
+      1: 0,
+      2: 0,
+      3: 0,
+      4: 0,
+      5: 0,
+    };
+    ratingStatsQuery.forEach((item) => {
+      ratingStats[item.rating] = item._count.rating;
+    });
+
+    // Tính đánh giá trung bình
+    const ratingSum = Object.entries(ratingStats).reduce(
+      (sum, [rating, count]) => sum + Number(rating) * count,
+      0,
+    );
+    const totalRatings = Object.values(ratingStats).reduce(
+      (sum, count) => sum + count,
+      0,
+    );
+    const averageRating = totalRatings > 0 ? ratingSum / totalRatings : 0;
+
+    // Tổng số trang
+    const totalPages = Math.ceil(totalItems / pageSize);
+
+    return {
+      data: reviews.map((review) => this.mapToResponseDto(review)),
+      currentPage,
+      totalPages,
+      total: totalItems,
+      averageRating: Number(averageRating.toFixed(1)),
+      ratingStats,
+    };
   }
 
   async findOne(id: string): Promise<ReviewResponseDto> {
@@ -94,8 +171,11 @@ export class ReviewService {
     return this.mapToResponseDto(review);
   }
 
-  async update(id: string, userId: string, updateReviewDto: UpdateReviewDto): Promise<ReviewResponseDto> {
-    // Kiểm tra xem đánh giá có tồn tại không
+  async update(
+    id: string,
+    userId: string,
+    updateReviewDto: UpdateReviewDto,
+  ): Promise<ReviewResponseDto> {
     const review = await this.prisma.review.findUnique({
       where: { id },
     });
@@ -104,12 +184,10 @@ export class ReviewService {
       throw new NotFoundException('Đánh giá không tồn tại');
     }
 
-    // Kiểm tra quyền sở hữu
     if (review.userId !== userId) {
       throw new ForbiddenException('Bạn không có quyền cập nhật đánh giá này');
     }
 
-    // Cập nhật đánh giá
     const updatedReview = await this.prisma.review.update({
       where: { id },
       data: {
@@ -133,7 +211,6 @@ export class ReviewService {
   }
 
   async remove(id: string, userId: string): Promise<void> {
-    // Kiểm tra xem đánh giá có tồn tại không
     const review = await this.prisma.review.findUnique({
       where: { id },
     });
@@ -142,7 +219,6 @@ export class ReviewService {
       throw new NotFoundException('Đánh giá không tồn tại');
     }
 
-    // Kiểm tra quyền sở hữu (hoặc quyền admin)
     if (review.userId !== userId) {
       throw new ForbiddenException('Bạn không có quyền xóa đánh giá này');
     }
@@ -152,33 +228,101 @@ export class ReviewService {
     });
   }
 
-  async findUserReviews(userId: string): Promise<ReviewResponseDto[]> {
-    const reviews = await this.prisma.review.findMany({
-      where: { userId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
+  async findUserReviews(
+    userId: string,
+    filter: ReviewFilterDto = {},
+  ): Promise<ReviewListResponseDto> {
+    const {
+      productId,
+      rating,
+      sortBy = ReviewSortField.CREATED_AT,
+      sortOrder = SortOrder.DESC,
+      currentPage = 1,
+      pageSize = 10,
+    } = filter;
+
+    // Xây dựng điều kiện where
+    const where: any = { userId };
+    if (productId) {
+      where.productId = productId;
+    }
+    if (rating) {
+      where.rating = rating;
+    }
+
+    // Thực hiện truy vấn với phân trang
+    const [reviews, totalItems] = await Promise.all([
+      this.prisma.review.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          product: {
+            select: {
+              id: true,
+              name: true,
+              images: true,
+            },
           },
         },
-        product: {
-          select: {
-            id: true,
-            name: true,
-            images: true,
-          },
+        orderBy: {
+          [sortBy]: sortOrder,
         },
-      },
-      orderBy: {
-        createdAt: 'desc',
+        skip: (currentPage - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.review.count({ where }),
+    ]);
+
+    // Tính thống kê đánh giá
+    const ratingStatsQuery = await this.prisma.review.groupBy({
+      by: ['rating'],
+      where,
+      _count: {
+        rating: true,
       },
     });
 
-    return reviews.map(review => this.mapToResponseDto(review));
+    // Định dạng kết quả thống kê đánh giá
+    const ratingStats: Record<number, number> = {
+      1: 0,
+      2: 0,
+      3: 0,
+      4: 0,
+      5: 0,
+    };
+    ratingStatsQuery.forEach((item) => {
+      ratingStats[item.rating] = item._count.rating;
+    });
+
+    // Tính đánh giá trung bình
+    const ratingSum = Object.entries(ratingStats).reduce(
+      (sum, [rating, count]) => sum + Number(rating) * count,
+      0,
+    );
+    const totalRatings = Object.values(ratingStats).reduce(
+      (sum, count) => sum + count,
+      0,
+    );
+    const averageRating = totalRatings > 0 ? ratingSum / totalRatings : 0;
+
+    // Tổng số trang
+    const totalPages = Math.ceil(totalItems / pageSize);
+
+    return {
+      data: reviews.map((review) => this.mapToResponseDto(review)),
+      currentPage,
+      totalPages,
+      total: totalItems,
+      averageRating: Number(averageRating.toFixed(1)),
+      ratingStats,
+    };
   }
 
-  // Helper method to map Prisma model to DTO
   private mapToResponseDto(review: any): ReviewResponseDto {
     return {
       id: review.id,
@@ -187,17 +331,21 @@ export class ReviewService {
       comment: review.comment,
       images: review.images,
       isPublished: review.isPublished,
-      user: review.user ? {
-        id: review.user.id,
-        name: review.user.name,
-      } : undefined,
-      product: review.product ? {
-        id: review.product.id,
-        name: review.product.name,
-        image: review.product.images[0] || null,
-      } : undefined,
+      user: review.user
+        ? {
+            id: review.user.id,
+            name: review.user.name,
+          }
+        : undefined,
+      product: review.product
+        ? {
+            id: review.product.id,
+            name: review.product.name,
+            image: review.product.images[0] || null,
+          }
+        : undefined,
       createdAt: review.createdAt,
       updatedAt: review.updatedAt,
     };
   }
-} 
+}

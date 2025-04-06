@@ -1,43 +1,44 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEmail,
-  IsString,
-  MinLength,
-  MaxLength,
-  Matches,
   IsNotEmpty,
+  IsString,
+  Length,
+  Matches,
 } from 'class-validator';
 
 export class SignUpDto {
-  @IsEmail()
-  @IsNotEmpty()
   @ApiProperty({
-    example: "trungdz10052003@gmail.com"
+    description: 'Email đăng ký tài khoản',
+    example: 'user@example.com',
   })
+  @IsEmail({}, { message: 'Email không đúng định dạng' })
+  @IsNotEmpty({ message: 'Email không được để trống' })
   email: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MinLength(2)
-  @MaxLength(50)
   @ApiProperty({
-    example: 'Trung',
+    description: 'Tên người dùng',
+    example: 'Nguyễn Văn A',
   })
+  @IsString({ message: 'Tên phải là chuỗi' })
+  @IsNotEmpty({ message: 'Tên không được để trống' })
+  @Length(2, 50, { message: 'Tên phải từ 2-50 ký tự' })
   name: string;
 
-  @IsString()
-  @MinLength(8)
-  @MaxLength(20)
+  @ApiProperty({
+    description: 'Mật khẩu đăng ký',
+    example: 'Password@123',
+  })
+  @IsString({ message: 'Mật khẩu phải là chuỗi' })
+  @Length(8, 20, { message: 'Mật khẩu phải từ 8-20 ký tự' })
   @Matches(
     /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
     {
       message:
-        'Password must contain at least one uppercase, one lowercase, one number and one special character',
+        'Mật khẩu phải chứa ít nhất một chữ hoa, một chữ thường, một số và một ký tự đặc biệt',
     },
   )
-  @ApiProperty({
-    example: 'Password@123',
-  })
+  @IsNotEmpty({ message: 'Mật khẩu không được để trống' })
   password: string;
 }
 

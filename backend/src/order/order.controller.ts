@@ -8,8 +8,10 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Request,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -17,6 +19,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -31,6 +34,7 @@ import {
   PaymentStatusResponseDto,
 } from './dto/order-response.dto';
 import { CreateOrderDto } from './dto/order.dto';
+import { PaginationDto, PagedResponseDto } from './dto/pagination.dto';
 import { OrderService } from './order.service';
 
 interface RequestUser {
@@ -46,7 +50,7 @@ export class OrderController {
 
   @Post()
   @UseGuards(AuthGuard)
-  @ApiOperation({ summary: 'Tạo đơn hàng mới' })
+  @ApiOperation({ summary: 'Tạo đơn hàng mới (từ danh sách sản phẩm)' })
   @ApiCreatedResponse({
     description: 'Đơn hàng đã được tạo thành công',
     type: OrderResponseDto,
@@ -59,28 +63,54 @@ export class OrderController {
     return this.orderService.createOrder(user.id, createOrderDto);
   }
 
+  @Post('from-cart')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Tạo đơn hàng từ giỏ hàng' })
+  @ApiCreatedResponse({
+    description: 'Đơn hàng đã được tạo thành công từ giỏ hàng',
+    type: OrderResponseDto,
+  })
+  async createOrderFromCart(
+    @Request() req,
+    @Body() createOrderDto: CreateOrderDto,
+  ): Promise<OrderResponseDto> {
+    const user = req.user as RequestUser;
+    if (!createOrderDto.items.some(item => item.cartItemId)) {
+      throw new BadRequestException('Cần cung cấp ít nhất một cartItemId để đặt hàng từ giỏ hàng');
+    }
+    return this.orderService.createOrder(user.id, createOrderDto);
+  }
+
   @Get()
-  @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Lấy danh sách đơn hàng' })
+  @ApiOperation({ summary: 'Lấy danh sách đơn hàng (có phân trang)' })
+  @ApiQuery({ name: 'currentPage', required: false, type: Number, description: 'Trang hiện tại' })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'Số mục trên mỗi trang' })
   @ApiOkResponse({
     description: 'Danh sách đơn hàng đã tìm thấy',
-    type: [OrderResponseDto],
+    type: PagedResponseDto,
   })
-  async getAllOrders(): Promise<OrderResponseDto[]> {
-    return this.orderService.getAllOrders();
+  async getAllOrders(
+    @Query() pagination: PaginationDto
+  ): Promise<PagedResponseDto<OrderResponseDto>> {
+    return this.orderService.getAllOrders(pagination);
   }
 
   @Get('my-orders')
   @UseGuards(AuthGuard)
-  @ApiOperation({ summary: 'Lấy danh sách đơn hàng của người dùng' })
+  @ApiOperation({ summary: 'Lấy danh sách đơn hàng của người dùng (có phân trang)' })
+  @ApiQuery({ name: 'currentPage', required: false, type: Number, description: 'Trang hiện tại' })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'Số mục trên mỗi trang' })
   @ApiOkResponse({
     description: 'Danh sách đơn hàng đã tìm thấy',
-    type: [OrderResponseDto],
+    type: PagedResponseDto,
   })
-  async getUserOrders(@Request() req): Promise<OrderResponseDto[]> {
+  async getUserOrders(
+    @Request() req,
+    @Query() pagination: PaginationDto
+  ): Promise<PagedResponseDto<OrderResponseDto>> {
     const user = req.user as RequestUser;
-    return this.orderService.getUserOrders(user.id);
+    return this.orderService.getUserOrders(user.id, pagination);
   }
 
   @Get(':id')

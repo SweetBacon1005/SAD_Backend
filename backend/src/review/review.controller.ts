@@ -1,61 +1,161 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, Req } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Roles } from '../common/decorators/roles.decorator';
-import { JwtAuthGuard } from '../auth/guard/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/role.guard';
+import { Roles } from '@/common/decorators/role.decorator';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
-import { ReviewService } from './review.service';
 import { CreateReviewDto } from './dto/create-review.dto';
-import { UpdateReviewDto } from './dto/update-review.dto';
+import { ReviewFilterDto, ReviewListResponseDto } from './dto/pagination-review.dto';
 import { ReviewResponseDto } from './dto/review-response.dto';
+import { UpdateReviewDto } from './dto/update-review.dto';
+import { ReviewService } from './review.service';
 
 @ApiTags('reviews')
 @Controller('reviews')
+@ApiBearerAuth()
 export class ReviewController {
   constructor(private readonly reviewService: ReviewService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CUSTOMER)
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Tạo đánh giá mới' })
-  @ApiResponse({ status: 201, description: 'Tạo đánh giá thành công', type: ReviewResponseDto })
-  create(@Req() req, @Body() createReviewDto: CreateReviewDto): Promise<ReviewResponseDto> {
+  @ApiResponse({
+    status: 201,
+    description: 'Tạo đánh giá thành công',
+    type: ReviewResponseDto,
+  })
+  create(
+    @Req() req,
+    @Body() createReviewDto: CreateReviewDto,
+  ): Promise<ReviewResponseDto> {
     return this.reviewService.create(req.user.id, createReviewDto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Lấy danh sách đánh giá' })
-  @ApiQuery({ name: 'productId', required: false, description: 'ID sản phẩm để lọc đánh giá' })
-  @ApiResponse({ status: 200, description: 'Trả về danh sách đánh giá', type: [ReviewResponseDto] })
-  findAll(@Query('productId') productId?: string): Promise<ReviewResponseDto[]> {
-    return this.reviewService.findAll(productId);
+  @ApiOperation({ summary: 'Lấy danh sách đánh giá (có phân trang)' })
+  @ApiQuery({
+    name: 'productId',
+    required: false,
+    description: 'ID sản phẩm để lọc đánh giá',
+  })
+  @ApiQuery({
+    name: 'rating',
+    required: false,
+    description: 'Lọc theo số sao đánh giá (1-5)',
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    description: 'Trường để sắp xếp (createdAt, rating, updatedAt)',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    description: 'Thứ tự sắp xếp (asc, desc)',
+  })
+  @ApiQuery({
+    name: 'currentPage',
+    required: false,
+    description: 'Trang hiện tại',
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    description: 'Số mục trên mỗi trang',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Trả về danh sách đánh giá có phân trang',
+    type: ReviewListResponseDto,
+  })
+  findAll(
+    @Query() filter: ReviewFilterDto,
+  ): Promise<ReviewListResponseDto> {
+    return this.reviewService.findAll(filter);
   }
 
   @Get('user')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Lấy danh sách đánh giá của người dùng đang đăng nhập' })
-  @ApiResponse({ status: 200, description: 'Trả về danh sách đánh giá của người dùng', type: [ReviewResponseDto] })
-  findUserReviews(@Req() req): Promise<ReviewResponseDto[]> {
-    return this.reviewService.findUserReviews(req.user.id);
+  @ApiOperation({
+    summary: 'Lấy danh sách đánh giá của người dùng đang đăng nhập (có phân trang)',
+  })
+  @ApiQuery({
+    name: 'productId',
+    required: false,
+    description: 'ID sản phẩm để lọc đánh giá',
+  })
+  @ApiQuery({
+    name: 'rating',
+    required: false,
+    description: 'Lọc theo số sao đánh giá (1-5)',
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    description: 'Trường để sắp xếp (createdAt, rating, updatedAt)',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    description: 'Thứ tự sắp xếp (asc, desc)',
+  })
+  @ApiQuery({
+    name: 'currentPage',
+    required: false,
+    description: 'Trang hiện tại',
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    description: 'Số mục trên mỗi trang',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Trả về danh sách đánh giá của người dùng có phân trang',
+    type: ReviewListResponseDto,
+  })
+  findUserReviews(
+    @Req() req,
+    @Query() filter: ReviewFilterDto
+  ): Promise<ReviewListResponseDto> {
+    return this.reviewService.findUserReviews(req.user.id, filter);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Lấy thông tin chi tiết một đánh giá' })
   @ApiParam({ name: 'id', description: 'ID của đánh giá' })
-  @ApiResponse({ status: 200, description: 'Trả về thông tin đánh giá', type: ReviewResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Trả về thông tin đánh giá',
+    type: ReviewResponseDto,
+  })
   findOne(@Param('id') id: string): Promise<ReviewResponseDto> {
     return this.reviewService.findOne(id);
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CUSTOMER)
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Cập nhật đánh giá' })
   @ApiParam({ name: 'id', description: 'ID của đánh giá' })
-  @ApiResponse({ status: 200, description: 'Đánh giá đã được cập nhật', type: ReviewResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Đánh giá đã được cập nhật',
+    type: ReviewResponseDto,
+  })
   update(
     @Param('id') id: string,
     @Req() req,
@@ -65,13 +165,11 @@ export class ReviewController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CUSTOMER, UserRole.ADMIN)
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Xóa đánh giá' })
   @ApiParam({ name: 'id', description: 'ID của đánh giá' })
   @ApiResponse({ status: 200, description: 'Đánh giá đã được xóa' })
   remove(@Param('id') id: string, @Req() req): Promise<void> {
     return this.reviewService.remove(id, req.user.id);
   }
-} 
+}

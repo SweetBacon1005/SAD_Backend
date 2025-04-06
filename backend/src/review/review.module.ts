@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
+import { ProductModule } from '../product/product.module';
+import { UserModule } from '../user/user.module';
 import { ReviewController } from './review.controller';
 import { ReviewService } from './review.service';
-import { UserModule } from '../user/user.module';
-import { ProductModule } from '../product/product.module';
 
 @Module({
   imports: [UserModule, ProductModule],
@@ -10,4 +10,4 @@ import { ProductModule } from '../product/product.module';
   providers: [ReviewService],
   exports: [ReviewService],
 })
-export class ReviewModule {} 
+export class ReviewModule {}

@@ -1,29 +1,37 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, Length, Matches } from 'class-validator';
 
 export class ResetPasswordDto {
-  @IsString()
-  @MinLength(6)
-  @MaxLength(6)
   @ApiProperty({
-    description: 'OTP sent to the user',
+    description: 'Email tài khoản cần đặt lại mật khẩu',
+    example: 'user@example.com',
+  })
+  @IsEmail({}, { message: 'Email không đúng định dạng' })
+  @IsNotEmpty({ message: 'Email không được để trống' })
+  email: string;
+
+  @ApiProperty({
+    description: 'Mã OTP dùng để xác thực',
     example: '123456',
   })
-  token: string;
+  @IsString({ message: 'OTP phải là chuỗi' })
+  @Length(6, 6, { message: 'OTP phải có đúng 6 ký tự' })
+  @IsNotEmpty({ message: 'OTP không được để trống' })
+  otp: string;
 
-  @IsString()
-  @MinLength(8)
-  @MaxLength(20)
+  @ApiProperty({
+    description: 'Mật khẩu mới của tài khoản',
+    example: 'Password@123',
+  })
+  @IsString({ message: 'Mật khẩu phải là chuỗi' })
+  @Length(8, 20, { message: 'Mật khẩu phải từ 8-20 ký tự' })
   @Matches(
     /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
     {
       message:
-        'Password must contain at least one uppercase, one lowercase, one number and one special character',
+        'Mật khẩu phải chứa ít nhất một chữ hoa, một chữ thường, một số và một ký tự đặc biệt',
     },
   )
-  @ApiProperty({
-    description: 'New password of the user',
-    example: 'Password@123',
-  })
-  newPassword: string;
+  @IsNotEmpty({ message: 'Mật khẩu không được để trống' })
+  password: string;
 }

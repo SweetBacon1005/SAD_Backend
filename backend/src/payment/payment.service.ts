@@ -1,10 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { PaymentMethod, PaymentStatus } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
-import { VnpayService } from './vnpay.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { PaymentResponseDto } from './dto/payment-response.dto';
 import { VnpayPaymentResponseDto } from './dto/vnpay-response.dto';
-import { PaymentMethod, PaymentStatus } from '@prisma/client';
+import { VnpayService } from './vnpay.service';
 
 @Injectable()
 export class PaymentService {
@@ -18,7 +23,9 @@ export class PaymentService {
   /**
    * Tạo thanh toán mới
    */
-  async create(createPaymentDto: CreatePaymentDto): Promise<PaymentResponseDto> {
+  async create(
+    createPaymentDto: CreatePaymentDto,
+  ): Promise<PaymentResponseDto> {
     // Kiểm tra đơn hàng tồn tại
     const order = await this.prisma.order.findUnique({
       where: { id: createPaymentDto.orderId },
@@ -33,7 +40,9 @@ export class PaymentService {
     if (order.payment) {
       // Nếu thanh toán đã tồn tại và thành công, không cho phép tạo mới
       if (order.payment.status === PaymentStatus.PAID) {
-        throw new BadRequestException('Đơn hàng này đã được thanh toán thành công');
+        throw new BadRequestException(
+          'Đơn hàng này đã được thanh toán thành công',
+        );
       }
     }
 
@@ -49,7 +58,6 @@ export class PaymentService {
 
     switch (createPaymentDto.method) {
       case PaymentMethod.VNPAY:
-        // Tạo URL thanh toán VNPay
         const paymentUrl = await this.vnpayService.createPaymentUrl({
           orderId: createPaymentDto.orderId,
           amount: createPaymentDto.amount,
@@ -73,7 +81,9 @@ export class PaymentService {
         break;
 
       default:
-        throw new BadRequestException('Phương thức thanh toán không được hỗ trợ');
+        throw new BadRequestException(
+          'Phương thức thanh toán không được hỗ trợ',
+        );
     }
 
     return paymentResponse;
@@ -85,16 +95,14 @@ export class PaymentService {
   async handleVnpayReturn(vnpParams: any): Promise<VnpayPaymentResponseDto> {
     // Xác minh thông tin thanh toán từ VNPay
     const vnpayResponse = this.vnpayService.verifyReturnUrl(vnpParams);
-    
+
     if (!vnpayResponse.isValidSignature) {
       this.logger.error('Chữ ký VNPay không hợp lệ');
       throw new BadRequestException('Chữ ký không hợp lệ');
     }
 
-    // Lấy thông tin đơn hàng từ orderId trả về
     const orderId = vnpayResponse.orderId;
-    
-    // Kiểm tra đơn hàng tồn tại
+
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: { payment: true },
@@ -106,10 +114,10 @@ export class PaymentService {
     }
 
     // Cập nhật thanh toán
-    let paymentStatus = PaymentStatus.PENDING;
+    let paymentStatus: PaymentStatus = PaymentStatus.PENDING;
     if (vnpayResponse.isSuccess) {
       paymentStatus = PaymentStatus.PAID;
-      
+
       // Cập nhật trạng thái đơn hàng
       await this.prisma.order.update({
         where: { id: orderId },
@@ -166,9 +174,11 @@ export class PaymentService {
   /**
    * Helper method để tạo hoặc cập nhật thanh toán
    */
-  private async createOrUpdatePayment(paymentData: any): Promise<PaymentResponseDto> {
+  private async createOrUpdatePayment(
+    paymentData: any,
+  ): Promise<PaymentResponseDto> {
     const { orderId } = paymentData;
-    
+
     // Kiểm tra thanh toán đã tồn tại chưa
     const existingPayment = await this.prisma.payment.findUnique({
       where: { orderId },
@@ -215,4 +225,4 @@ export class PaymentService {
       createdAt: payment.createdAt,
     };
   }
-} 
+}

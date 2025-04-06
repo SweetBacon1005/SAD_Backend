@@ -24,12 +24,30 @@ export class OrderItemResponseDto {
 
   @ApiProperty({ description: 'ID của sản phẩm', example: '6151f3d2e149e32b3404c8b5' })
   productId: string;
+  
+  @ApiPropertyOptional({ 
+    description: 'ID của biến thể sản phẩm (nếu có)', 
+    example: '6151f3d2e149e32b3404c8c7' 
+  })
+  variantId?: string;
+  
+  @ApiPropertyOptional({ 
+    description: 'Tên biến thể (nếu có)', 
+    example: 'Size M - Màu Đỏ' 
+  })
+  variantName?: string;
 
   @ApiProperty({ description: 'Số lượng', example: 2 })
   quantity: number;
 
   @ApiProperty({ description: 'Giá sản phẩm tại thời điểm đặt hàng', example: 150000 })
   price: number;
+  
+  @ApiPropertyOptional({
+    description: 'Thuộc tính của biến thể (màu sắc, kích cỡ...)',
+    example: { color: 'Đỏ', size: 'M' },
+  })
+  attributes?: Record<string, any>;
 
   @ApiPropertyOptional({ description: 'Thông tin sản phẩm', type: ProductBasicDto })
   product?: ProductBasicDto;
