@@ -11,9 +11,9 @@ export class SearchProductResponseDto {
   @ApiProperty({ description: 'Tổng số sản phẩm tìm thấy', example: 47 })
   total: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Danh sách sản phẩm tìm thấy',
-    type: [ProductResponseDto]
+    type: [ProductResponseDto],
   })
   data: ProductResponseDto[];
 }

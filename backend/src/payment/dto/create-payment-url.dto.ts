@@ -1,21 +1,21 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
-export class CreateVnpayPaymentDto {
+export class CreatePaymentUrlDto {
   @ApiProperty({
     description: 'Mã đơn hàng',
     example: 'ORDER_123456',
   })
-  @IsNotEmpty()
-  @IsString()
+  @IsNotEmpty({ message: 'Mã đơn hàng không được để trống' })
+  @IsString({ message: 'Mã đơn hàng phải là chuỗi' })
   orderId: string;
 
   @ApiProperty({
     description: 'Số tiền thanh toán (VND)',
     example: 100000,
   })
-  @IsNotEmpty()
-  @IsNumber()
+  @IsNotEmpty({ message: 'Số tiền không được để trống' })
+  @IsNumber({}, { message: 'Số tiền phải là số' })
   amount: number;
 
   @ApiProperty({
@@ -24,7 +24,7 @@ export class CreateVnpayPaymentDto {
     required: false,
   })
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Thông tin đơn hàng phải là chuỗi' })
   orderInfo?: string;
 
   @ApiProperty({
@@ -33,7 +33,7 @@ export class CreateVnpayPaymentDto {
     required: false,
   })
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Loại đơn hàng phải là chuỗi' })
   orderType?: string;
 
   @ApiProperty({
@@ -42,7 +42,7 @@ export class CreateVnpayPaymentDto {
     required: false,
   })
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Ngôn ngữ phải là chuỗi' })
   locale?: string;
 
   @ApiProperty({
@@ -51,7 +51,7 @@ export class CreateVnpayPaymentDto {
     required: false,
   })
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Mã ngân hàng phải là chuỗi' })
   bankCode?: string;
 
   @ApiProperty({
@@ -60,6 +60,6 @@ export class CreateVnpayPaymentDto {
     required: false,
   })
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Địa chỉ IP phải là chuỗi' })
   ipAddr?: string;
-} 
+}
