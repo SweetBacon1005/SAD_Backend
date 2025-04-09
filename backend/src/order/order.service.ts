@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus, PaymentStatus } from '@prisma/client';
+import { OrderStatus, PaymentStatus, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import {
   CancelOrderResponseDto,
@@ -223,7 +223,7 @@ export class OrderService {
           payment: {
             create: {
               status: PaymentStatus.PENDING,
-              method: payload.paymentMethod,
+              paymentMethod: payload.paymentMethod,
               amount: total,
             },
           },
@@ -491,9 +491,26 @@ export class OrderService {
         where: { id: order.payment.id },
         data: {
           status,
-          transactionId: transactionId || order.payment.transactionId,
         },
       });
+
+      if (transactionId) {
+        const transaction = await this.prisma.paymentTransaction.findFirst({
+          where: { paymentId: order.payment.id }
+        });
+
+        if (transaction) {
+          await this.prisma.paymentTransaction.update({
+            where: { id: transaction.id },
+            data: {
+              transactionId,
+              status: status === PaymentStatus.PAID ? TransactionStatus.SUCCESS : 
+                      status === PaymentStatus.FAILED ? TransactionStatus.FAILED : 
+                      TransactionStatus.PENDING
+            }
+          });
+        }
+      }
     }
 
     return {

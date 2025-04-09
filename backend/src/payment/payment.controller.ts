@@ -7,6 +7,7 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -22,16 +23,23 @@ import { CreatePaymentDto } from './dto/create-payment.dto';
 import { PaymentResponseDto } from './dto/payment-response.dto';
 import { VnpayPaymentResponseDto } from './dto/vnpay-response.dto';
 import { PaymentService } from './payment.service';
+import { VnpayService } from './vnpay.service';
+import { HandleVnpayReturnDto } from './dto/handle-vnpay-return.dto';
+import { VnpayIpnDto } from './dto/vnpay-ipn.dto';
+import { VnpayQueryDrDto } from './dto/vnpay-query-dr.dto';
+import { VnpayRefundDto } from './dto/vnpay-refund.dto';
 
 @ApiTags('payments')
 @Controller('payments')
 @ApiBearerAuth()
 export class PaymentController {
-  constructor(private readonly paymentService: PaymentService) {}
+  constructor(
+    private readonly paymentService: PaymentService,
+    private readonly vnpayService: VnpayService,
+  ) {}
 
   @Post()
   @Roles(UserRole.CUSTOMER)
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Tạo thanh toán mới' })
   @ApiResponse({
     status: 201,
@@ -47,43 +55,16 @@ export class PaymentController {
 
   @Get('vnpay-return')
   @ApiOperation({ summary: 'Xử lý callback từ VNPay' })
-  @ApiQuery({
-    name: 'vnp_Amount',
-    required: true,
-    description: 'Số tiền thanh toán',
-  })
-  @ApiQuery({
-    name: 'vnp_BankCode',
-    required: true,
-    description: 'Mã ngân hàng',
-  })
-  @ApiQuery({
-    name: 'vnp_OrderInfo',
-    required: true,
-    description: 'Thông tin đơn hàng',
-  })
-  @ApiQuery({
-    name: 'vnp_ResponseCode',
-    required: true,
-    description: 'Mã phản hồi',
-  })
-  @ApiQuery({ name: 'vnp_TxnRef', required: true, description: 'Mã đơn hàng' })
-  @ApiQuery({
-    name: 'vnp_SecureHash',
-    required: true,
-    description: 'Chữ ký xác thực',
-  })
   @ApiResponse({
     status: 200,
     description: 'Xử lý callback thành công',
     type: VnpayPaymentResponseDto,
   })
-  handleVnpayReturn(@Query() query: any): Promise<VnpayPaymentResponseDto> {
+  handleVnpayReturn(@Query() query: HandleVnpayReturnDto): Promise<VnpayPaymentResponseDto> {
     return this.paymentService.handleVnpayReturn(query);
   }
 
   @Get(':id')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Lấy thông tin thanh toán' })
   @ApiParam({ name: 'id', description: 'ID của thanh toán' })
   @ApiResponse({
@@ -96,7 +77,6 @@ export class PaymentController {
   }
 
   @Get('order/:orderId')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Lấy thông tin thanh toán của đơn hàng' })
   @ApiParam({ name: 'orderId', description: 'ID của đơn hàng' })
   @ApiResponse({
@@ -108,5 +88,38 @@ export class PaymentController {
     @Param('orderId') orderId: string,
   ): Promise<PaymentResponseDto> {
     return this.paymentService.findByOrderId(orderId);
+  }
+
+  @Post('vnpay-ipn')
+  @ApiOperation({ summary: 'Xử lý IPN từ VNPay' })
+  @ApiResponse({
+    status: 200,
+    description: 'Xử lý IPN thành công',
+    type: VnpayPaymentResponseDto,
+  })
+  async handleVnpayIpn(@Body() body: VnpayIpnDto): Promise<VnpayPaymentResponseDto> {
+    return this.paymentService.handleVnpayIpn(body);
+  }
+
+  @Post('vnpay-query-dr')
+  @ApiOperation({ summary: 'Truy vấn giao dịch VNPay' })
+  @ApiResponse({
+    status: 200,
+    description: 'Truy vấn giao dịch thành công',
+    type: VnpayPaymentResponseDto,
+  })
+  async queryVnpayDr(@Body() queryDrDto: VnpayQueryDrDto): Promise<VnpayPaymentResponseDto> {
+    return this.paymentService.queryVnpayDr(queryDrDto);
+  }
+
+  @Post('vnpay-refund')
+  @ApiOperation({ summary: 'Hoàn tiền giao dịch VNPay' })
+  @ApiResponse({
+    status: 200,
+    description: 'Yêu cầu hoàn tiền thành công',
+    type: VnpayPaymentResponseDto,
+  })
+  async refundVnpay(@Body() refundDto: VnpayRefundDto): Promise<VnpayPaymentResponseDto> {
+    return this.paymentService.refundVnpay(refundDto);
   }
 }

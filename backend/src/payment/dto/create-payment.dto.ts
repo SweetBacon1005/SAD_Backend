@@ -12,11 +12,11 @@ export class CreatePaymentDto {
   orderId: string;
 
   @ApiProperty({
-    description: 'Số tiền thanh toán',
+    description: 'Số tiền thanh toán (đơn vị VNĐ)',
     example: 150000,
   })
-  @IsNotEmpty({ message: 'Số tiền thanh toán không được để trống' })
-  @IsNumber({}, { message: 'Số tiền thanh toán phải là số' })
+  @IsNotEmpty({ message: 'Số tiền không được để trống' })
+  @IsNumber({}, { message: 'Số tiền phải là số' })
   amount: number;
 
   @ApiProperty({
@@ -26,21 +26,13 @@ export class CreatePaymentDto {
   })
   @IsNotEmpty({ message: 'Phương thức thanh toán không được để trống' })
   @IsEnum(PaymentMethod, { message: 'Phương thức thanh toán không hợp lệ' })
-  method: PaymentMethod;
+  paymentMethod: PaymentMethod;
 
-  @ApiPropertyOptional({
-    description: 'Địa chỉ IP của khách hàng (cho thanh toán trực tuyến)',
-    example: '127.0.0.1',
+  @ApiProperty({
+    description: 'Thông tin đơn hàng',
+    example: 'Thanh toán đơn hàng #12345',
+    required: false,
   })
-  @IsOptional()
-  @IsString({ message: 'Địa chỉ IP phải là chuỗi' })
-  ipAddr?: string;
-
-  @ApiPropertyOptional({
-    description: 'Thông tin bổ sung',
-    example: 'Ghi chú thanh toán',
-  })
-  @IsOptional()
-  @IsString({ message: 'Thông tin bổ sung phải là chuỗi' })
-  note?: string;
+  @IsString({ message: 'Thông tin đơn hàng phải là chuỗi' })
+  orderInfo?: string;
 } 

@@ -6,12 +6,12 @@ import {
 } from '@nestjs/common';
 import { Prisma, ProductVariant } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { AddCartItemDto } from './dto/add-cart-item.dto';
 import {
   AddCartItemResponseDto,
   CartResponseDto,
   RemoveCartItemResponseDto,
 } from './dto/cart-response.dto';
-import { AddCartItemDto } from './dto/add-cart-item.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 import { UpdateCartDto } from './dto/update-cart.dto';
 
@@ -20,7 +20,6 @@ export class CartService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getCartByUserId(userId: string): Promise<CartResponseDto> {
-    // Get cart with items and associated products
     const cart = await this.prisma.cart.findUnique({
       where: { userId },
       include: {
@@ -78,10 +77,10 @@ export class CartService {
     // Chuyển đổi các thuộc tính
     const items = cart.items.map((item) => {
       // Tìm variant đã chọn (nếu có)
-      const selectedVariant = item.variantId 
-        ? item.product.variants.find(v => v.id === item.variantId)
+      const selectedVariant = item.variantId
+        ? item.product.variants.find((v) => v.id === item.variantId)
         : null;
-      
+
       return {
         id: item.id,
         productId: item.productId,
@@ -94,23 +93,27 @@ export class CartService {
           name: item.product.name,
           basePrice: item.product.basePrice,
           images: item.product.images,
-          store: item.product.store ? {
-            id: item.product.store.id,
-            name: item.product.store.name,
-          } : undefined,
+          store: item.product.store
+            ? {
+                id: item.product.store.id,
+                name: item.product.store.name,
+              }
+            : undefined,
           variants: item.product.variants.map((variant) => ({
             id: variant.id,
             name: variant.name,
             price: variant.price,
             quantity: variant.quantity,
-            isSelected: variant.id === item.variantId
+            isSelected: variant.id === item.variantId,
           })),
-          selectedVariant: selectedVariant ? {
-            id: selectedVariant.id,
-            name: selectedVariant.name,
-            price: selectedVariant.price,
-            quantity: selectedVariant.quantity,
-          } : null,
+          selectedVariant: selectedVariant
+            ? {
+                id: selectedVariant.id,
+                name: selectedVariant.name,
+                price: selectedVariant.price,
+                quantity: selectedVariant.quantity,
+              }
+            : null,
         },
         totalPrice: item.selectedPrice * item.quantity,
       };
@@ -143,16 +146,26 @@ export class CartService {
         name: cartItem.product.name,
         basePrice: cartItem.product.basePrice,
         images: cartItem.product.images,
-        store: cartItem.product.store ? {
-          id: cartItem.product.store.id,
-          name: cartItem.product.store.name,
-        } : undefined,
-        selectedVariant: cartItem.variantId ? {
-          id: cartItem.variantId,
-          name: cartItem.product.variants?.find(v => v.id === cartItem.variantId)?.name || 'Unknown Variant',
-          price: cartItem.selectedPrice,
-          quantity: cartItem.product.variants?.find(v => v.id === cartItem.variantId)?.quantity || 0,
-        } : null
+        store: cartItem.product.store
+          ? {
+              id: cartItem.product.store.id,
+              name: cartItem.product.store.name,
+            }
+          : undefined,
+        selectedVariant: cartItem.variantId
+          ? {
+              id: cartItem.variantId,
+              name:
+                cartItem.product.variants?.find(
+                  (v) => v.id === cartItem.variantId,
+                )?.name || 'Unknown Variant',
+              price: cartItem.selectedPrice,
+              quantity:
+                cartItem.product.variants?.find(
+                  (v) => v.id === cartItem.variantId,
+                )?.quantity || 0,
+            }
+          : null,
       },
       totalPrice: cartItem.selectedPrice * cartItem.quantity,
     };
@@ -293,7 +306,9 @@ export class CartService {
           throw new NotFoundException('Sản phẩm không tồn tại');
         }
 
-        const newVariant = product.variants.find((v) => v.id === data.variantId);
+        const newVariant = product.variants.find(
+          (v) => v.id === data.variantId,
+        );
         if (!newVariant) {
           throw new NotFoundException('Biến thể sản phẩm không tồn tại');
         }
