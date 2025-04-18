@@ -233,44 +233,62 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired OTP');
     }
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordResetOTP: null,
-        passwordResetOTPExpires: null,
+    const token = this.jwtService.sign(
+      { 
+        id: user.id, 
+        email: user.email, 
+        role: user.role,
+        resetPasswordAuth: true 
       },
-    });
-
-    const token = this.jwtService.sign({ email: user.email });
+      { expiresIn: '15m' } 
+    );
 
     return { token };
   }
 
   async resetPassword(payload: ResetPasswordDto): Promise<void> {
-    const { email, otp, password } = payload;
+    const { email, password, token } = payload;
 
-    const user = await this.prisma.user.findFirst({
-      where: {
-        email: email.toLowerCase(),
-        passwordResetOTP: otp,
-        passwordResetOTPExpires: { gt: new Date() },
-      },
-    });
+    try {
+      const decoded = this.jwtService.verify(token);
+      
+      // Kiểm tra token có phải là token reset password không
+      if (!decoded.resetPasswordAuth) {
+        throw new BadRequestException('Invalid reset password token');
+      }
 
-    if (!user) {
-      throw new BadRequestException('Invalid or expired OTP');
+      // Kiểm tra email trong token và email trong request có khớp nhau không
+      if (decoded.email !== email.toLowerCase()) {
+        throw new BadRequestException('Email does not match with token');
+      }
+
+      const user = await this.prisma.user.findUnique({
+        where: { 
+          email: email.toLowerCase(),
+          id: decoded.id
+        },
+      });
+
+      if (!user) {
+        throw new BadRequestException('User not found');
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          password: hashedPassword,
+          passwordResetOTP: null,
+          passwordResetOTPExpires: null,
+        },
+      });
+    } catch (error) {
+      if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+        throw new BadRequestException('Invalid or expired token');
+      }
+      throw error;
     }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        password: hashedPassword,
-        passwordResetOTP: null,
-        passwordResetOTPExpires: null,
-      },
-    });
   }
 
   private generateJwtToken(user: {
