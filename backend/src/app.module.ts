@@ -17,6 +17,8 @@ import { UserModule } from './user/user.module';
 import { ReviewModule } from './review/review.module';
 import { WishlistModule } from './wishlist/wishlist.module';
 import { PaymentModule } from './payment/payment.module';
+import { CategoryModule } from './category/category.module';
+import { VoucherModule } from './voucher/voucher.module';
 config();
 
 @Module({
@@ -52,6 +54,8 @@ config();
     ReviewModule,
     WishlistModule,
     PaymentModule,
+    CategoryModule,
+    VoucherModule,
   ],
   providers: [
     {

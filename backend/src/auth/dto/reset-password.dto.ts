@@ -11,13 +11,12 @@ export class ResetPasswordDto {
   email: string;
 
   @ApiProperty({
-    description: 'Mã OTP dùng để xác thực',
-    example: '123456',
+    description: 'Token xác thực từ bước verify OTP',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
-  @IsString({ message: 'OTP phải là chuỗi' })
-  @Length(6, 6, { message: 'OTP phải có đúng 6 ký tự' })
-  @IsNotEmpty({ message: 'OTP không được để trống' })
-  otp: string;
+  @IsString({ message: 'Token phải là chuỗi' })
+  @IsNotEmpty({ message: 'Token không được để trống' })
+  token: string;
 
   @ApiProperty({
     description: 'Mật khẩu mới của tài khoản',
