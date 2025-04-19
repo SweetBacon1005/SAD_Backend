@@ -43,8 +43,15 @@ export class AuthService {
       where: { email: email.toLowerCase() },
     });
 
+
     if (existingUser) {
-      throw new ConflictException('User already exists');
+      if (existingUser.isEmailVerified) {
+        throw new ConflictException('User already exists');
+      } else {
+        await this.prisma.user.delete({
+          where: { id: existingUser.id },
+        });
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -86,6 +93,7 @@ export class AuthService {
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
+
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -220,6 +228,8 @@ export class AuthService {
     verifyPasswordResetOtpDto: VerifyPasswordResetOtpDto,
   ): Promise<{ token: string }> {
     const { email, otp } = verifyPasswordResetOtpDto;
+
+    console.log(email, otp);
 
     const user = await this.prisma.user.findFirst({
       where: {

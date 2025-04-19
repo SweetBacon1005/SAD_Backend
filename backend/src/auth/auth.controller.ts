@@ -58,14 +58,14 @@ export class AuthController {
     return this.authService.signIn(payload);
   }
 
-  // @Public()
-  // @Post('forgot-password')
-  // @ApiOperation({ summary: 'Yêu cầu khôi phục mật khẩu' })
-  // @ApiResponse({ status: 200, description: 'Đã gửi email khôi phục mật khẩu' })
-  // @ApiResponse({ status: 400, description: 'Email không tồn tại' })
-  // async forgotPassword(@Body() payload: ForgotPasswordDto): Promise<void> {
-  //   return this.authService.forgotPassword(payload);
-  // }
+  @Public()
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Yêu cầu khôi phục mật khẩu' })
+  @ApiResponse({ status: 200, description: 'Đã gửi email khôi phục mật khẩu' })
+  @ApiResponse({ status: 400, description: 'Email không tồn tại' })
+  async forgotPassword(@Body() payload: ForgotPasswordDto): Promise<void> {
+    return this.authService.forgotPassword(payload);
+  }
 
   @Public()
   @Post('send-verification-otp')
