@@ -216,8 +216,6 @@ export class AuthService {
   ): Promise<{ token: string }> {
     const { email, otp } = payload;
 
-    console.log(email, otp);
-
     const user = await this.prisma.user.findFirst({
       where: {
         email: email.toLowerCase(),
