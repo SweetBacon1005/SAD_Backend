@@ -1,4 +1,3 @@
-// cart.service.ts
 import {
   BadRequestException,
   Injectable,
@@ -28,7 +27,7 @@ export class CartService {
             product: {
               include: {
                 variants: true,
-                store: true, // Kèm thông tin cửa hàng để hiển thị
+                store: true,
               },
             },
           },
@@ -36,7 +35,6 @@ export class CartService {
       },
     });
 
-    // Create a new cart if it doesn't exist
     if (!cart) {
       const newCart = await this.prisma.cart.create({
         data: {
@@ -61,22 +59,17 @@ export class CartService {
     return this.mapCartToResponse(cart);
   }
 
-  // Hàm chuyển đổi từ Cart entity sang CartResponseDto
   private mapCartToResponse(cart: any): CartResponseDto {
-    // Tính tổng số sản phẩm
     const totalItems = cart.items.reduce(
       (total, item) => total + item.quantity,
       0,
     );
 
-    // Tính tổng giá trị từ selectedPrice
     const totalAmount = cart.items.reduce((total, item) => {
       return total + item.selectedPrice * item.quantity;
     }, 0);
 
-    // Chuyển đổi các thuộc tính
     const items = cart.items.map((item) => {
-      // Tìm variant đã chọn (nếu có)
       const selectedVariant = item.variantId
         ? item.product.variants.find((v) => v.id === item.variantId)
         : null;
@@ -131,7 +124,6 @@ export class CartService {
     };
   }
 
-  // Hàm chuyển đổi từ CartItem entity sang AddCartItemResponseDto
   private mapCartItemToResponse(cartItem: any): AddCartItemResponseDto {
     return {
       id: cartItem.id,
@@ -188,19 +180,16 @@ export class CartService {
         throw new NotFoundException('Sản phẩm không tồn tại');
       }
 
-      // Xác định variant và giá
       let selectedPrice = product.basePrice;
       let selectedVariant: ProductVariant | undefined = undefined;
 
       if (data.variantId) {
-        // Nếu có variantId, kiểm tra variant tồn tại
         selectedVariant = product.variants.find((v) => v.id === data.variantId);
         if (!selectedVariant) {
           throw new NotFoundException('Biến thể sản phẩm không tồn tại');
         }
         selectedPrice = selectedVariant.price;
 
-        // Kiểm tra số lượng tồn kho
         if (data.quantity > selectedVariant.quantity) {
           throw new BadRequestException(
             `Số lượng yêu cầu vượt quá số lượng tồn kho (${selectedVariant.quantity})`,
@@ -208,7 +197,6 @@ export class CartService {
         }
       }
 
-      // Tìm hoặc tạo giỏ hàng
       let cart = await prisma.cart.findUnique({
         where: { userId },
       });
@@ -221,7 +209,6 @@ export class CartService {
         });
       }
 
-      // Kiểm tra sản phẩm đã tồn tại trong giỏ hàng chưa
       const existingItem = await prisma.cartItem.findFirst({
         where: {
           cartId: cart.id,
@@ -231,12 +218,11 @@ export class CartService {
       });
 
       if (existingItem) {
-        // Cập nhật số lượng nếu sản phẩm đã tồn tại
         const updatedItem = await prisma.cartItem.update({
           where: { id: existingItem.id },
           data: {
             quantity: existingItem.quantity + data.quantity,
-            selectedPrice: selectedPrice, // Cập nhật giá mới nhất
+            selectedPrice: selectedPrice,
           },
           include: {
             product: {
@@ -249,7 +235,6 @@ export class CartService {
         });
         return this.mapCartItemToResponse(updatedItem);
       } else {
-        // Thêm sản phẩm mới vào giỏ hàng
         const newItem = await prisma.cartItem.create({
           data: {
             cartId: cart.id,
@@ -319,12 +304,10 @@ export class CartService {
           );
         }
 
-        // Cập nhật giá và variantId
         selectedPrice = newVariant.price;
         variantId = newVariant.id;
       }
 
-      // Update cart item
       const updatedItem = await prisma.cartItem.update({
         where: { id: data.cartItemId },
         data: {
@@ -349,7 +332,6 @@ export class CartService {
     userId: string,
     cartItemId: string,
   ): Promise<RemoveCartItemResponseDto> {
-    // Get cart
     const cart = await this.prisma.cart.findUnique({
       where: { userId },
       include: {
@@ -361,13 +343,11 @@ export class CartService {
       throw new NotFoundException('Cart not found');
     }
 
-    // Check if cart item belongs to user's cart
     const cartItem = cart.items.find((item) => item.id === cartItemId);
     if (!cartItem) {
       throw new NotFoundException('Cart item not found');
     }
 
-    // Delete cart item
     const deletedItem = await this.prisma.cartItem.delete({
       where: { id: cartItemId },
     });
@@ -379,7 +359,6 @@ export class CartService {
   }
 
   async clearCart(userId: string): Promise<CartResponseDto> {
-    // Get cart
     const cart = await this.prisma.cart.findUnique({
       where: { userId },
     });
@@ -388,12 +367,10 @@ export class CartService {
       throw new NotFoundException('Cart not found');
     }
 
-    // Delete all cart items
     await this.prisma.cartItem.deleteMany({
       where: { cartId: cart.id },
     });
 
-    // Return empty cart
     const updatedCart = await this.prisma.cart.findUnique({
       where: { id: cart.id },
       include: {
@@ -417,7 +394,6 @@ export class CartService {
     userId: string,
     data: UpdateCartDto,
   ): Promise<CartResponseDto> {
-    // Get cart
     const cart = await this.prisma.cart.findUnique({
       where: { userId },
     });
@@ -426,7 +402,6 @@ export class CartService {
       throw new NotFoundException('Cart not found');
     }
 
-    // Update cart metadata
     const updatedCart = await this.prisma.cart.update({
       where: { id: cart.id },
       data: {

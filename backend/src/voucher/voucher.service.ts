@@ -1,580 +1,353 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { Voucher } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { CreateVoucherDto } from './dto/create-voucher.dto';
 import { UpdateVoucherDto } from './dto/update-voucher.dto';
+import { ValidateVoucherResponseDto } from './dto/validate-voucher-response.dto';
 import { VoucherResponseDto } from './dto/voucher-response.dto';
-import { DiscountType, VoucherApplicable } from '@prisma/client';
 
 @Injectable()
 export class VoucherService {
+  private readonly logger = new Logger(VoucherService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createVoucherDto: CreateVoucherDto): Promise<VoucherResponseDto> {
-    const { 
-      code, 
-      name, 
-      description, 
-      discountType, 
-      discountValue, 
-      minOrderValue = 0, 
-      maxDiscount, 
-      startDate, 
-      endDate,
-      isActive = true,
-      usageLimit,
-      applicableFor = VoucherApplicable.ALL,
-      conditions 
-    } = createVoucherDto;
-
-    // Kiểm tra mã voucher đã tồn tại chưa
+  async create(
+    createVoucherDto: CreateVoucherDto,
+  ): Promise<VoucherResponseDto> {
     const existingVoucher = await this.prisma.voucher.findUnique({
-      where: { code },
+      where: { code: createVoucherDto.code },
     });
 
     if (existingVoucher) {
-      throw new BadRequestException(`Voucher với mã ${code} đã tồn tại`);
+      throw new ConflictException(
+        `Voucher with code ${createVoucherDto.code} already exists`,
+      );
     }
 
-    // Kiểm tra giá trị giảm giá
-    if (discountType === DiscountType.PERCENTAGE && discountValue > 100) {
-      throw new BadRequestException('Giá trị giảm giá theo % không thể vượt quá 100%');
-    }
-
-    // Kiểm tra ngày bắt đầu và kết thúc
-    const startDateObj = new Date(startDate);
-    const endDateObj = new Date(endDate);
-
-    if (startDateObj > endDateObj) {
-      throw new BadRequestException('Ngày bắt đầu không thể sau ngày kết thúc');
-    }
-
-    // Tạo voucher mới
     const voucher = await this.prisma.voucher.create({
       data: {
-        code,
-        name,
-        description,
-        discountType,
-        discountValue,
-        minOrderValue,
-        maxDiscount,
-        startDate: startDateObj,
-        endDate: endDateObj,
-        isActive,
-        usageLimit,
+        code: createVoucherDto.code,
+        name: createVoucherDto.name,
+        discountType: createVoucherDto.discountType,
+        description: createVoucherDto.description,
+        discountValue: createVoucherDto.discountValue,
+        minOrderValue: createVoucherDto.minOrderValue || 0,
+        maxDiscount: createVoucherDto.maxDiscount,
+        startDate: createVoucherDto.startDate,
+        endDate: createVoucherDto.endDate,
+        isActive: createVoucherDto.isActive ?? true,
+        usageLimit: createVoucherDto.usageLimit,
         usageCount: 0,
-        applicableFor,
-        conditions,
+        conditions: createVoucherDto.conditions,
+        applicableFor: createVoucherDto.applicableFor,
       },
     });
 
-    return {
-      ...voucher,
-      conditions: voucher.conditions as Record<string, any> | null,
-    };
+    return this.mapVoucherToDto(voucher);
   }
 
   async findAll(isActive?: boolean): Promise<VoucherResponseDto[]> {
-    let where = {};
-    
-    if (isActive !== undefined) {
-      where = { isActive };
-    }
-    
+    const where = isActive !== undefined ? { isActive } : {};
+
     const vouchers = await this.prisma.voucher.findMany({
       where,
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { createdAt: 'desc' },
     });
-    
-    return vouchers.map(voucher => ({
-      ...voucher,
-      conditions: voucher.conditions as Record<string, any> | null,
-    }));
+
+    return vouchers.map((voucher) => this.mapVoucherToDto(voucher));
   }
 
   async findOne(id: string): Promise<VoucherResponseDto> {
     const voucher = await this.prisma.voucher.findUnique({
       where: { id },
     });
-    
+
     if (!voucher) {
-      throw new NotFoundException(`Voucher với ID ${id} không tồn tại`);
+      throw new NotFoundException(`Voucher with ID ${id} not found`);
     }
-    
-    return {
-      ...voucher,
-      conditions: voucher.conditions as Record<string, any> | null,
-    };
+
+    return this.mapVoucherToDto(voucher);
   }
 
   async findByCode(code: string): Promise<VoucherResponseDto> {
     const voucher = await this.prisma.voucher.findUnique({
       where: { code },
     });
-    
+
     if (!voucher) {
-      throw new NotFoundException(`Voucher với mã ${code} không tồn tại`);
+      throw new NotFoundException(`Voucher with code ${code} not found`);
     }
-    
-    return {
-      ...voucher,
-      conditions: voucher.conditions as Record<string, any> | null,
-    };
+
+    return this.mapVoucherToDto(voucher);
   }
 
-  async update(id: string, updateVoucherDto: UpdateVoucherDto): Promise<VoucherResponseDto> {
-    // Kiểm tra voucher tồn tại
+  async update(
+    id: string,
+    updateVoucherDto: UpdateVoucherDto,
+  ): Promise<VoucherResponseDto> {
     const existingVoucher = await this.prisma.voucher.findUnique({
       where: { id },
     });
-    
+
     if (!existingVoucher) {
-      throw new NotFoundException(`Voucher với ID ${id} không tồn tại`);
+      throw new NotFoundException(`Voucher with ID ${id} not found`);
     }
-    
-    // Kiểm tra mã voucher nếu thay đổi
-    if (updateVoucherDto.code && updateVoucherDto.code !== existingVoucher.code) {
-      const codeExists = await this.prisma.voucher.findFirst({
-        where: {
-          code: updateVoucherDto.code,
-          id: { not: id },
-        },
+
+    if (
+      updateVoucherDto.code &&
+      updateVoucherDto.code !== existingVoucher.code
+    ) {
+      const duplicateCode = await this.prisma.voucher.findUnique({
+        where: { code: updateVoucherDto.code },
       });
-      
-      if (codeExists) {
-        throw new BadRequestException(`Voucher với mã ${updateVoucherDto.code} đã tồn tại`);
+
+      if (duplicateCode) {
+        throw new ConflictException(
+          `Voucher with code ${updateVoucherDto.code} already exists`,
+        );
       }
     }
-    
-    // Kiểm tra giá trị giảm giá nếu thay đổi
-    if (
-      updateVoucherDto.discountType === DiscountType.PERCENTAGE &&
-      updateVoucherDto.discountValue &&
-      updateVoucherDto.discountValue > 100
-    ) {
-      throw new BadRequestException('Giá trị giảm giá theo % không thể vượt quá 100%');
-    }
-    
-    // Kiểm tra ngày bắt đầu và kết thúc nếu thay đổi
-    let startDateObj = existingVoucher.startDate;
-    let endDateObj = existingVoucher.endDate;
-    
-    if (updateVoucherDto.startDate) {
-      startDateObj = new Date(updateVoucherDto.startDate);
-    }
-    
-    if (updateVoucherDto.endDate) {
-      endDateObj = new Date(updateVoucherDto.endDate);
-    }
-    
-    if (startDateObj > endDateObj) {
-      throw new BadRequestException('Ngày bắt đầu không thể sau ngày kết thúc');
-    }
-    
-    // Cập nhật voucher
-    const updatedVoucher = await this.prisma.voucher.update({
+
+    const voucher = await this.prisma.voucher.update({
       where: { id },
       data: {
         code: updateVoucherDto.code,
         name: updateVoucherDto.name,
-        description: updateVoucherDto.description,
         discountType: updateVoucherDto.discountType,
+        description: updateVoucherDto.description,
         discountValue: updateVoucherDto.discountValue,
         minOrderValue: updateVoucherDto.minOrderValue,
         maxDiscount: updateVoucherDto.maxDiscount,
-        startDate: updateVoucherDto.startDate ? startDateObj : undefined,
-        endDate: updateVoucherDto.endDate ? endDateObj : undefined,
+        startDate: updateVoucherDto.startDate,
+        endDate: updateVoucherDto.endDate,
         isActive: updateVoucherDto.isActive,
         usageLimit: updateVoucherDto.usageLimit,
-        applicableFor: updateVoucherDto.applicableFor,
         conditions: updateVoucherDto.conditions,
+        applicableFor: updateVoucherDto.applicableFor,
       },
     });
-    
-    return {
-      ...updatedVoucher,
-      conditions: updatedVoucher.conditions as Record<string, any> | null,
-    };
+
+    return this.mapVoucherToDto(voucher);
   }
 
   async remove(id: string): Promise<{ success: boolean; message: string }> {
-    // Kiểm tra voucher tồn tại
     const existingVoucher = await this.prisma.voucher.findUnique({
       where: { id },
     });
-    
+
     if (!existingVoucher) {
-      throw new NotFoundException(`Voucher với ID ${id} không tồn tại`);
+      throw new NotFoundException(`Voucher with ID ${id} not found`);
     }
-    
-    // Xóa voucher
+
     await this.prisma.voucher.delete({
       where: { id },
     });
-    
-    return { success: true, message: 'Voucher đã được xóa thành công' };
+
+    return {
+      success: true,
+      message: `Voucher with ID ${id} has been successfully deleted`,
+    };
+  }
+
+  async getPublicVouchers(): Promise<VoucherResponseDto[]> {
+    const currentDate = new Date();
+    const vouchers = await this.prisma.voucher.findMany({
+      where: {
+        isActive: true,
+        startDate: { lte: currentDate },
+        endDate: { gte: currentDate },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const availableVouchers = vouchers.filter(
+      (voucher) =>
+        voucher.usageLimit === null || voucher.usageCount < voucher.usageLimit,
+    );
+
+    return availableVouchers.map((voucher) => this.mapVoucherToDto(voucher));
   }
 
   async validateVoucher(
-    code: string,
+    voucherCode: string,
     orderTotal: number,
     userId?: string,
     productIds?: string[],
-  ): Promise<{
-    valid: boolean;
-    voucher?: VoucherResponseDto;
-    discountAmount?: number;
-    message?: string;
-  }> {
+  ): Promise<ValidateVoucherResponseDto> {
     try {
       const voucher = await this.prisma.voucher.findUnique({
-        where: { code },
+        where: { code: voucherCode },
       });
 
       if (!voucher) {
-        return { valid: false, message: 'Mã voucher không tồn tại' };
-      }
-
-      // Kiểm tra trạng thái kích hoạt
-      if (!voucher.isActive) {
-        return { valid: false, message: 'Voucher không còn hiệu lực' };
-      }
-
-      // Kiểm tra thời gian hiệu lực
-      const now = new Date();
-      if (now < voucher.startDate || now > voucher.endDate) {
-        return { valid: false, message: 'Voucher không nằm trong thời gian hiệu lực' };
-      }
-
-      // Kiểm tra giới hạn sử dụng
-      if (voucher.usageLimit !== null && voucher.usageCount >= voucher.usageLimit) {
-        return { valid: false, message: 'Voucher đã hết lượt sử dụng' };
-      }
-
-      // Kiểm tra giá trị đơn hàng tối thiểu
-      if (orderTotal < voucher.minOrderValue) {
         return {
-          valid: false,
-          message: `Giá trị đơn hàng tối thiểu phải là ${voucher.minOrderValue} VNĐ`,
+          isValid: false,
+          message: 'Voucher không tồn tại',
+          voucher: null,
         };
       }
 
-      // Kiểm tra điều kiện áp dụng
-      if (voucher.applicableFor !== VoucherApplicable.ALL && voucher.conditions) {
-        // Kiểm tra theo danh mục sản phẩm
-        if (
-          voucher.applicableFor === VoucherApplicable.SPECIFIC_CATEGORIES &&
-          (!productIds || productIds.length === 0)
-        ) {
+      if (!voucher.isActive) {
+        return {
+          isValid: false,
+          message: 'Voucher đã bị vô hiệu hóa',
+          voucher: null,
+        };
+      }
+
+      const currentDate = new Date();
+      if (
+        (voucher.startDate && currentDate < voucher.startDate) ||
+        (voucher.endDate && currentDate > voucher.endDate)
+      ) {
+        return {
+          isValid: false,
+          message: 'Voucher không trong thời gian hiệu lực',
+          voucher: null,
+        };
+      }
+
+      if (
+        voucher.usageLimit !== null &&
+        voucher.usageLimit !== undefined &&
+        voucher.usageCount >= voucher.usageLimit
+      ) {
+        return {
+          isValid: false,
+          message: 'Voucher đã đạt giới hạn sử dụng',
+          voucher: null,
+        };
+      }
+
+      if (voucher.minOrderValue && orderTotal < voucher.minOrderValue) {
+        return {
+          isValid: false,
+          message: `Giá trị đơn hàng tối thiểu để sử dụng voucher là ${voucher.minOrderValue}`,
+          voucher: null,
+        };
+      }
+
+      if (
+        voucher.conditions &&
+        typeof voucher.conditions === 'object' &&
+        'productIds' in voucher.conditions &&
+        Array.isArray((voucher.conditions as Record<string, any>).productIds) &&
+        (voucher.conditions as Record<string, any>).productIds.length > 0 &&
+        productIds &&
+        productIds.length > 0
+      ) {
+        const hasRequiredProduct = productIds.some((id) =>
+          (voucher.conditions as Record<string, any>).productIds.includes(id),
+        );
+
+        if (!hasRequiredProduct) {
           return {
-            valid: false,
-            message: 'Voucher chỉ áp dụng cho các danh mục sản phẩm cụ thể',
+            isValid: false,
+            message:
+              'Voucher chỉ áp dụng cho một số sản phẩm nhất định không có trong đơn hàng',
+            voucher: null,
           };
-        }
-
-        // Kiểm tra theo sản phẩm cụ thể
-        if (
-          voucher.applicableFor === VoucherApplicable.SPECIFIC_PRODUCTS &&
-          (!productIds || productIds.length === 0)
-        ) {
-          return {
-            valid: false,
-            message: 'Voucher chỉ áp dụng cho các sản phẩm cụ thể',
-          };
-        }
-
-        // Kiểm tra theo người dùng
-        if (
-          voucher.applicableFor === VoucherApplicable.SPECIFIC_USERS &&
-          (!userId || !(voucher.conditions as Record<string, any>).userIds?.includes(userId))
-        ) {
-          return {
-            valid: false,
-            message: 'Voucher chỉ áp dụng cho những người dùng cụ thể',
-          };
-        }
-
-        // Kiểm tra đơn hàng đầu tiên
-        if (voucher.applicableFor === VoucherApplicable.FIRST_ORDER && userId) {
-          const orderCount = await this.prisma.order.count({
-            where: {
-              userId,
-            },
-          });
-
-          if (orderCount > 0) {
-            return {
-              valid: false,
-              message: 'Voucher chỉ áp dụng cho đơn hàng đầu tiên',
-            };
-          }
         }
       }
 
-      // Tính toán số tiền giảm giá
       let discountAmount = 0;
-      if (voucher.discountType === DiscountType.PERCENTAGE) {
+      if (voucher.discountType === 'PERCENTAGE') {
         discountAmount = (orderTotal * voucher.discountValue) / 100;
-        if (voucher.maxDiscount !== null && discountAmount > voucher.maxDiscount) {
+        if (
+          voucher.maxDiscount !== null &&
+          voucher.maxDiscount !== undefined &&
+          discountAmount > voucher.maxDiscount
+        ) {
           discountAmount = voucher.maxDiscount;
         }
       } else {
-        discountAmount = voucher.discountValue;
-        if (discountAmount > orderTotal) {
-          discountAmount = orderTotal;
-        }
+        discountAmount = Math.min(voucher.discountValue, orderTotal);
       }
 
       return {
-        valid: true,
-        voucher: {
-          ...voucher,
-          conditions: voucher.conditions as Record<string, any> | null,
-        },
-        discountAmount,
+        isValid: true,
         message: 'Voucher hợp lệ',
+        voucher: this.mapVoucherToDto(voucher),
+        discountAmount,
       };
     } catch (error) {
-      return { valid: false, message: 'Lỗi khi xác thực voucher' };
+      this.logger.error(
+        `Error validating voucher: ${error.message}`,
+        error.stack,
+      );
+      return {
+        isValid: false,
+        message: 'Lỗi khi kiểm tra voucher',
+        voucher: null,
+      };
     }
   }
 
-  async incrementUsageCount(code: string): Promise<VoucherResponseDto> {
-    const voucher = await this.prisma.voucher.findUnique({
-      where: { code },
-    });
+  async increaseVoucherUsage(voucherId: string): Promise<void> {
+    if (!voucherId) return;
 
-    if (!voucher) {
-      throw new NotFoundException(`Voucher với mã ${code} không tồn tại`);
-    }
-
-    const updatedVoucher = await this.prisma.voucher.update({
-      where: { code },
-      data: {
-        usageCount: {
-          increment: 1,
+    try {
+      await this.prisma.voucher.update({
+        where: { id: voucherId },
+        data: {
+          usageCount: {
+            increment: 1,
+          },
         },
-      },
-    });
+      });
+    } catch (error) {
+      this.logger.error(
+        `Error incrementing voucher usage for voucher ${voucherId}: ${error.message}`,
+        error.stack,
+      );
+    }
+  }
 
+  async incrementUsageCount(code: string): Promise<void> {
+    if (!code) return;
+
+    try {
+      await this.prisma.voucher.update({
+        where: { code },
+        data: {
+          usageCount: {
+            increment: 1,
+          },
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Error incrementing voucher usage for voucher code ${code}: ${error.message}`,
+        error.stack,
+      );
+    }
+  }
+
+  private mapVoucherToDto(voucher: Voucher): VoucherResponseDto {
     return {
-      ...updatedVoucher,
-      conditions: updatedVoucher.conditions as Record<string, any> | null,
+      id: voucher.id,
+      code: voucher.code,
+      name: voucher.name,
+      discountType: voucher.discountType,
+      description: voucher.description,
+      discountValue: voucher.discountValue,
+      minOrderValue: voucher.minOrderValue,
+      maxDiscount: voucher.maxDiscount,
+      startDate: voucher.startDate,
+      endDate: voucher.endDate,
+      isActive: voucher.isActive,
+      usageLimit: voucher.usageLimit,
+      usageCount: voucher.usageCount,
+      createdAt: voucher.createdAt,
+      updatedAt: voucher.updatedAt,
+      conditions: voucher.conditions as Record<string, any> | null,
+      applicableFor: voucher.applicableFor,
     };
   }
-
-  // Phương thức gán voucher cho user
-  async assignVoucherToUser(userId: string, voucherId: string, expiresAt?: string): Promise<any> {
-    // Kiểm tra user tồn tại
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new NotFoundException(`Người dùng với ID ${userId} không tồn tại`);
-    }
-
-    // Kiểm tra voucher tồn tại và còn hiệu lực
-    const voucher = await this.prisma.voucher.findUnique({
-      where: { 
-        id: voucherId,
-        isActive: true,
-      },
-    });
-
-    if (!voucher) {
-      throw new NotFoundException(`Voucher với ID ${voucherId} không tồn tại hoặc không còn hiệu lực`);
-    }
-
-    // Kiểm tra user đã có voucher này chưa
-    const existingUserVoucher = await this.prisma.userVoucher.findFirst({
-      where: {
-        userId,
-        voucherId,
-        isUsed: false,
-      },
-    });
-
-    if (existingUserVoucher) {
-      throw new BadRequestException('Người dùng đã có voucher này');
-    }
-
-    // Đặt thời gian hết hạn mặc định là thời gian hết hạn của voucher nếu không được chỉ định
-    let expiryDate = voucher.endDate;
-    if (expiresAt) {
-      expiryDate = new Date(expiresAt);
-      // Kiểm tra thời gian hết hạn không vượt quá thời gian hết hạn của voucher
-      if (expiryDate > voucher.endDate) {
-        expiryDate = voucher.endDate;
-      }
-    }
-
-    // Tạo user voucher mới
-    const userVoucher = await this.prisma.userVoucher.create({
-      data: {
-        userId,
-        voucherId,
-        isUsed: false,
-        expiresAt: expiryDate,
-      },
-      include: {
-        voucher: true,
-      },
-    });
-
-    return userVoucher;
-  }
-
-  // Phương thức lấy tất cả voucher của một user
-  async getUserVouchers(userId: string, onlyValid: boolean = false): Promise<any[]> {
-    // Kiểm tra user tồn tại
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new NotFoundException(`Người dùng với ID ${userId} không tồn tại`);
-    }
-
-    let whereCondition: any = {
-      userId,
-    };
-
-    // Nếu chỉ lấy voucher còn hiệu lực
-    if (onlyValid) {
-      const now = new Date();
-      whereCondition = {
-        ...whereCondition,
-        isUsed: false,
-        expiresAt: {
-          gte: now,
-        },
-        voucher: {
-          isActive: true,
-          endDate: {
-            gte: now,
-          },
-        },
-      };
-    }
-
-    // Lấy voucher của user
-    const userVouchers = await this.prisma.userVoucher.findMany({
-      where: whereCondition,
-      include: {
-        voucher: true,
-      },
-      orderBy: {
-        obtainedAt: 'desc',
-      },
-    });
-
-    return userVouchers;
-  }
-
-  // Phương thức đánh dấu một voucher của user đã được sử dụng
-  async markVoucherAsUsed(userVoucherId: string): Promise<any> {
-    // Kiểm tra user voucher tồn tại
-    const userVoucher = await this.prisma.userVoucher.findUnique({
-      where: { id: userVoucherId },
-      include: {
-        voucher: true,
-      },
-    });
-
-    if (!userVoucher) {
-      throw new NotFoundException(`User voucher với ID ${userVoucherId} không tồn tại`);
-    }
-
-    if (userVoucher.isUsed) {
-      throw new BadRequestException('Voucher này đã được sử dụng');
-    }
-
-    // Kiểm tra voucher còn hiệu lực
-    const now = new Date();
-    if (userVoucher.expiresAt && userVoucher.expiresAt < now) {
-      throw new BadRequestException('Voucher đã hết hạn');
-    }
-
-    if (!userVoucher.voucher.isActive || userVoucher.voucher.endDate < now) {
-      throw new BadRequestException('Voucher không còn hiệu lực');
-    }
-
-    // Cập nhật trạng thái sử dụng
-    const updatedUserVoucher = await this.prisma.userVoucher.update({
-      where: { id: userVoucherId },
-      data: {
-        isUsed: true,
-        usedAt: now,
-      },
-      include: {
-        voucher: true,
-      },
-    });
-
-    // Tăng số lần sử dụng của voucher
-    await this.incrementUsageCount(userVoucher.voucher.code);
-
-    return updatedUserVoucher;
-  }
-
-  // Phương thức đếm số lượng voucher của một user
-  async countUserVouchers(userId: string, onlyValid: boolean = false): Promise<number> {
-    // Kiểm tra user tồn tại
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new NotFoundException(`Người dùng với ID ${userId} không tồn tại`);
-    }
-
-    let whereCondition: any = {
-      userId,
-    };
-
-    // Nếu chỉ đếm voucher còn hiệu lực
-    if (onlyValid) {
-      const now = new Date();
-      whereCondition = {
-        ...whereCondition,
-        isUsed: false,
-        expiresAt: {
-          gte: now,
-        },
-        voucher: {
-          isActive: true,
-          endDate: {
-            gte: now,
-          },
-        },
-      };
-    }
-
-    // Đếm voucher của user
-    const count = await this.prisma.userVoucher.count({
-      where: whereCondition,
-    });
-
-    return count;
-  }
-
-  // Phương thức kiểm tra voucher có thuộc về người dùng không
-  async verifyVoucherOwnership(userVoucherId: string, userId: string): Promise<boolean> {
-    const userVoucher = await this.prisma.userVoucher.findUnique({
-      where: { id: userVoucherId },
-    });
-
-    if (!userVoucher) {
-      throw new NotFoundException(`UserVoucher với ID ${userVoucherId} không tồn tại`);
-    }
-
-    if (userVoucher.userId !== userId) {
-      throw new BadRequestException('Không có quyền sử dụng voucher này');
-    }
-
-    return true;
-  }
-} 
+}

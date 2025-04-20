@@ -11,6 +11,7 @@ import {
   Query,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -23,8 +24,9 @@ import { CategoryResponseDto } from './dto/category-response.dto';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
-@ApiTags('Categories')
+@ApiTags('categories')
 @Controller('categories')
+@ApiBearerAuth()
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 

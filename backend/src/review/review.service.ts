@@ -75,7 +75,6 @@ export class ReviewService {
     const pageSize = Number(payload.pageSize);
     const skip = (currentPage - 1) * pageSize;
 
-    // Xây dựng điều kiện where
     const where: any = { isPublished: true };
     if (productId) {
       where.productId = productId;
@@ -84,7 +83,6 @@ export class ReviewService {
       where.rating = rating;
     }
 
-    // Thực hiện truy vấn với phân trang
     const [reviews, totalItems] = await Promise.all([
       this.prisma.review.findMany({
         where,
@@ -106,7 +104,6 @@ export class ReviewService {
       this.prisma.review.count({ where }),
     ]);
 
-    // Tính thống kê đánh giá
     const ratingStatsQuery = await this.prisma.review.groupBy({
       by: ['rating'],
       where,
@@ -115,7 +112,6 @@ export class ReviewService {
       },
     });
 
-    // Định dạng kết quả thống kê đánh giá
     const ratingStats: Record<number, number> = {
       1: 0,
       2: 0,
@@ -127,7 +123,6 @@ export class ReviewService {
       ratingStats[item.rating] = item._count.rating;
     });
 
-    // Tính đánh giá trung bình
     const ratingSum = Object.entries(ratingStats).reduce(
       (sum, [rating, count]) => sum + Number(rating) * count,
       0,
@@ -138,7 +133,6 @@ export class ReviewService {
     );
     const averageRating = totalRatings > 0 ? ratingSum / totalRatings : 0;
 
-    // Tổng số trang
     const totalPages = Math.ceil(totalItems / pageSize);
 
     return {
@@ -241,7 +235,6 @@ export class ReviewService {
       pageSize = 10,
     } = filter;
 
-    // Xây dựng điều kiện where
     const where: any = { userId };
     if (productId) {
       where.productId = productId;
@@ -250,7 +243,6 @@ export class ReviewService {
       where.rating = rating;
     }
 
-    // Thực hiện truy vấn với phân trang
     const [reviews, totalItems] = await Promise.all([
       this.prisma.review.findMany({
         where,
@@ -278,7 +270,6 @@ export class ReviewService {
       this.prisma.review.count({ where }),
     ]);
 
-    // Tính thống kê đánh giá
     const ratingStatsQuery = await this.prisma.review.groupBy({
       by: ['rating'],
       where,
@@ -287,7 +278,6 @@ export class ReviewService {
       },
     });
 
-    // Định dạng kết quả thống kê đánh giá
     const ratingStats: Record<number, number> = {
       1: 0,
       2: 0,
@@ -299,7 +289,6 @@ export class ReviewService {
       ratingStats[item.rating] = item._count.rating;
     });
 
-    // Tính đánh giá trung bình
     const ratingSum = Object.entries(ratingStats).reduce(
       (sum, [rating, count]) => sum + Number(rating) * count,
       0,
@@ -310,7 +299,6 @@ export class ReviewService {
     );
     const averageRating = totalRatings > 0 ? ratingSum / totalRatings : 0;
 
-    // Tổng số trang
     const totalPages = Math.ceil(totalItems / pageSize);
 
     return {

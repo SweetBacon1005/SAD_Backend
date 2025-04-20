@@ -1,4 +1,3 @@
-// update-cart.dto.ts
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsObject, IsOptional } from 'class-validator';
 

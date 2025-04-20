@@ -6,10 +6,12 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { FRONTEND_URL, OTP_EXPIRATION_MINUTES } from '../common/constants';
+import {
+  ACCESS_TOKEN_EXPIRATION,
+  OTP_EXPIRATION_MINUTES,
+} from '../common/constants';
 import { PrismaService } from '../database/prisma.service';
 import { MailService } from '../mail/mail.service';
-import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SignInDto } from './dto/sign-in.dto';
 import { SignUpDto } from './dto/sign-up.dto';
@@ -24,7 +26,6 @@ import {
 
 @Injectable()
 export class AuthService {
-  private readonly FRONTEND_URL: string;
   private readonly OTP_EXPIRATION_MINUTES: number;
 
   constructor(
@@ -32,11 +33,10 @@ export class AuthService {
     private jwtService: JwtService,
     private mailService: MailService,
   ) {
-    this.FRONTEND_URL = FRONTEND_URL;
     this.OTP_EXPIRATION_MINUTES = OTP_EXPIRATION_MINUTES;
   }
 
-  async signUp(payload: SignUpDto): Promise<{ token: string }> {
+  async signUp(payload: SignUpDto): Promise<{ message: string }> {
     const { email, password, name } = payload;
 
     const existingUser = await this.prisma.user.findUnique({
@@ -72,13 +72,10 @@ export class AuthService {
 
     await this.sendEmailVerificationOTP({ email });
 
-    const token = this.generateJwtToken({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    return { token };
+    return {
+      message:
+        'Đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản.',
+    };
   }
 
   async signIn(payload: SignInDto): Promise<{ token: string }> {
@@ -102,23 +99,14 @@ export class AuthService {
       throw new UnauthorizedException('Please verify your email first');
     }
 
-    const token = this.generateJwtToken(user);
-
-    return { token };
-  }
-
-  async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<void> {
-    const { email } = forgotPasswordDto;
-
-    const user = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+    const token = this.generateJwtToken({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      isEmailVerified: true,
     });
 
-    if (!user) {
-      throw new BadRequestException('No user found with this email');
-    }
-
-    this.sendEmailVerificationOTP({ email });
+    return { token };
   }
 
   async sendEmailVerificationOTP(
@@ -141,25 +129,22 @@ export class AuthService {
       data: {
         emailVerificationOTP: otp,
         emailVerificationOTPExpires: new Date(
-          Date.now() + this.OTP_EXPIRATION_MINUTES * 60 * 1000,
+          Date.now() + this.OTP_EXPIRATION_MINUTES * 60 * 1000 * 5,
         ),
       },
     });
 
-    // Send OTP via email
-    await this.mailService.sendMail({
-      to: user.email,
-      subject: 'Email Verification OTP',
-      template: 'email-otp',
-      context: {
-        name: user.name,
-        otp,
-        expirationMinutes: this.OTP_EXPIRATION_MINUTES,
-      },
-    });
+    await this.mailService.sendEmailVerificationEmail(
+      user.email,
+      user.name,
+      otp,
+      this.OTP_EXPIRATION_MINUTES,
+    );
   }
 
-  async verifyEmailOTP(verifyEmailOtpDto: VerifyEmailOtpDto): Promise<void> {
+  async verifyEmailOTP(
+    verifyEmailOtpDto: VerifyEmailOtpDto,
+  ): Promise<{ token: string }> {
     const { email, otp } = verifyEmailOtpDto;
 
     const user = await this.prisma.user.findFirst({
@@ -171,7 +156,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new BadRequestException('Invalid or expired OTP');
+      throw new BadRequestException('Mã OTP không hợp lệ hoặc đã hết hạn');
     }
 
     await this.prisma.user.update({
@@ -182,6 +167,15 @@ export class AuthService {
         emailVerificationOTPExpires: null,
       },
     });
+
+    const token = this.generateJwtToken({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      isEmailVerified: true,
+    });
+
+    return { token };
   }
 
   async sendPasswordResetOTP(
@@ -197,39 +191,30 @@ export class AuthService {
       throw new BadRequestException('No user found with this email');
     }
 
-    // Generate OTP
     const otp = this.generateOTP();
 
-    // Update user with OTP and expiration
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
         passwordResetOTP: otp,
         passwordResetOTPExpires: new Date(
-          Date.now() + this.OTP_EXPIRATION_MINUTES * 60 * 1000,
+          Date.now() + this.OTP_EXPIRATION_MINUTES * 60 * 1000 * 5,
         ),
       },
     });
 
-    // Send OTP via email
-    await this.mailService.sendMail({
-      to: user.email,
-      subject: 'Password Reset OTP',
-      template: 'password-reset-otp',
-      context: {
-        name: user.name,
-        otp,
-        expirationMinutes: this.OTP_EXPIRATION_MINUTES,
-      },
-    });
+    await this.mailService.sendPasswordResetEmail(
+      user.email,
+      user.name,
+      otp,
+      this.OTP_EXPIRATION_MINUTES,
+    );
   }
 
   async verifyPasswordResetOTP(
-    verifyPasswordResetOtpDto: VerifyPasswordResetOtpDto,
+    payload: VerifyPasswordResetOtpDto,
   ): Promise<{ token: string }> {
-    const { email, otp } = verifyPasswordResetOtpDto;
-
-    console.log(email, otp);
+    const { email, otp } = payload;
 
     const user = await this.prisma.user.findFirst({
       where: {
@@ -244,13 +229,13 @@ export class AuthService {
     }
 
     const token = this.jwtService.sign(
-      { 
-        id: user.id, 
-        email: user.email, 
+      {
+        id: user.id,
+        email: user.email,
         role: user.role,
-        resetPasswordAuth: true 
+        resetPasswordAuth: true,
       },
-      { expiresIn: '15m' } 
+      { expiresIn: '15m' },
     );
 
     return { token };
@@ -261,21 +246,19 @@ export class AuthService {
 
     try {
       const decoded = this.jwtService.verify(token);
-      
-      // Kiểm tra token có phải là token reset password không
+
       if (!decoded.resetPasswordAuth) {
         throw new BadRequestException('Invalid reset password token');
       }
 
-      // Kiểm tra email trong token và email trong request có khớp nhau không
       if (decoded.email !== email.toLowerCase()) {
         throw new BadRequestException('Email does not match with token');
       }
 
       const user = await this.prisma.user.findUnique({
-        where: { 
+        where: {
           email: email.toLowerCase(),
-          id: decoded.id
+          id: decoded.id,
         },
       });
 
@@ -294,7 +277,10 @@ export class AuthService {
         },
       });
     } catch (error) {
-      if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      if (
+        error.name === 'JsonWebTokenError' ||
+        error.name === 'TokenExpiredError'
+      ) {
         throw new BadRequestException('Invalid or expired token');
       }
       throw error;
@@ -305,13 +291,18 @@ export class AuthService {
     id: string;
     email: string;
     role: string;
+    isEmailVerified?: boolean;
   }): string {
     const payload = {
       id: user.id,
       email: user.email,
       role: user.role,
+      isEmailVerified:
+        user.isEmailVerified !== undefined ? user.isEmailVerified : true,
     };
-    return this.jwtService.sign(payload);
+    return this.jwtService.sign(payload, {
+      expiresIn: ACCESS_TOKEN_EXPIRATION,
+    });
   }
 
   private generateOTP(): string {

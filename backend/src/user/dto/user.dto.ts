@@ -1,4 +1,3 @@
-// src/user/dto/user.dto.ts
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import {

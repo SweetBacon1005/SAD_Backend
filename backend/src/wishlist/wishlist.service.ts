@@ -73,13 +73,11 @@ export class WishlistService {
       pageSize = 10,
     } = filter;
 
-    // Xây dựng điều kiện where
     const where: any = { userId };
     if (search) {
       where.name = { contains: search, mode: 'insensitive' };
     }
 
-    // Thực hiện truy vấn với phân trang
     const [wishlists, totalItems] = await Promise.all([
       this.prisma.wishlist.findMany({
         where,
@@ -108,7 +106,6 @@ export class WishlistService {
       this.prisma.wishlist.count({ where }),
     ]);
 
-    // Tổng số trang
     const totalPages = Math.ceil(totalItems / pageSize);
 
     return {
@@ -131,13 +128,11 @@ export class WishlistService {
       pageSize = 10,
     } = filter;
 
-    // Xây dựng điều kiện where
     const where: any = { isPublic: true };
     if (search) {
       where.name = { contains: search, mode: 'insensitive' };
     }
 
-    // Thực hiện truy vấn với phân trang
     const [wishlists, totalItems] = await Promise.all([
       this.prisma.wishlist.findMany({
         where,
@@ -166,7 +161,6 @@ export class WishlistService {
       this.prisma.wishlist.count({ where }),
     ]);
 
-    // Tổng số trang
     const totalPages = Math.ceil(totalItems / pageSize);
 
     return {
@@ -202,15 +196,13 @@ export class WishlistService {
     if (!wishlist) {
       throw new NotFoundException('Không tìm thấy danh sách yêu thích');
     }
-
-    // Nếu danh sách không phải công khai và người dùng không phải chủ sở hữu
+    
     if (!wishlist.isPublic && wishlist.userId !== userId) {
       throw new ForbiddenException(
         'Bạn không có quyền xem danh sách yêu thích này',
       );
     }
 
-    // Xây dựng điều kiện lọc items
     const itemsWhere: any = { wishlistId: id };
     if (payload.search) {
       itemsWhere.product = {
@@ -218,7 +210,6 @@ export class WishlistService {
       };
     }
 
-    // Lấy items với phân trang
     const [items, totalItems] = await Promise.all([
       this.prisma.wishlistItem.findMany({
         where: itemsWhere,
@@ -234,7 +225,6 @@ export class WishlistService {
       this.prisma.wishlistItem.count({ where: itemsWhere }),
     ]);
 
-    // Tổng số trang
     const totalPages = Math.ceil(totalItems / pageSize);
 
     const baseResponse = this.mapToResponseDto({
@@ -256,7 +246,6 @@ export class WishlistService {
     userId: string,
     updateWishlistDto: UpdateWishlistDto,
   ): Promise<WishlistResponseDto> {
-    // Kiểm tra danh sách tồn tại và thuộc về người dùng
     const wishlist = await this.prisma.wishlist.findUnique({ where: { id } });
 
     if (!wishlist) {
@@ -267,7 +256,6 @@ export class WishlistService {
       throw new ForbiddenException('Bạn không có quyền cập nhật danh sách này');
     }
 
-    // Cập nhật danh sách
     const updatedWishlist = await this.prisma.wishlist.update({
       where: { id },
       data: {
@@ -302,7 +290,6 @@ export class WishlistService {
   }
 
   async remove(id: string, userId: string): Promise<void> {
-    // Kiểm tra danh sách tồn tại và thuộc về người dùng
     const wishlist = await this.prisma.wishlist.findUnique({ where: { id } });
 
     if (!wishlist) {
@@ -321,7 +308,6 @@ export class WishlistService {
     userId: string,
     addItemDto: AddWishlistItemDto,
   ): Promise<WishlistResponseDto> {
-    // Kiểm tra danh sách tồn tại và thuộc về người dùng
     const wishlist = await this.prisma.wishlist.findUnique({
       where: { id: wishlistId },
     });
@@ -336,7 +322,6 @@ export class WishlistService {
       );
     }
 
-    // Kiểm tra sản phẩm tồn tại
     const product = await this.prisma.product.findUnique({
       where: { id: addItemDto.productId },
     });
@@ -345,7 +330,6 @@ export class WishlistService {
       throw new NotFoundException('Sản phẩm không tồn tại');
     }
 
-    // Kiểm tra sản phẩm đã tồn tại trong danh sách chưa
     const existingItem = await this.prisma.wishlistItem.findFirst({
       where: {
         wishlistId,
@@ -359,7 +343,6 @@ export class WishlistService {
       );
     }
 
-    // Thêm sản phẩm vào danh sách
     await this.prisma.wishlistItem.create({
       data: {
         wishlistId,
@@ -368,7 +351,6 @@ export class WishlistService {
       },
     });
 
-    // Trả về danh sách đã cập nhật
     return this.findOne(wishlistId, userId);
   }
 
@@ -377,7 +359,6 @@ export class WishlistService {
     itemId: string,
     userId: string,
   ): Promise<WishlistResponseDto> {
-    // Kiểm tra danh sách tồn tại và thuộc về người dùng
     const wishlist = await this.prisma.wishlist.findUnique({
       where: { id: wishlistId },
     });
@@ -392,7 +373,6 @@ export class WishlistService {
       );
     }
 
-    // Kiểm tra item tồn tại và thuộc về wishlist
     const item = await this.prisma.wishlistItem.findUnique({
       where: { id: itemId },
     });
@@ -401,16 +381,13 @@ export class WishlistService {
       throw new NotFoundException('Sản phẩm không tồn tại trong danh sách');
     }
 
-    // Xóa item
     await this.prisma.wishlistItem.delete({
       where: { id: itemId },
     });
 
-    // Trả về danh sách đã cập nhật
     return this.findOne(wishlistId, userId);
   }
 
-  // Helper method để map từ Prisma model sang DTO
   private mapToWishlistResponseDto(wishlist: any): WishlistResponseDto {
     return {
       id: wishlist.id,
