@@ -1,5 +1,5 @@
-// src/order/order.controller.ts
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -9,12 +9,13 @@ import {
   Post,
   Put,
   Query,
+  Req,
   Request,
   UseGuards,
-  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
@@ -34,7 +35,7 @@ import {
   PaymentStatusResponseDto,
 } from './dto/order-response.dto';
 import { CreateOrderDto } from './dto/order.dto';
-import { PaginationDto, PagedResponseDto } from './dto/pagination.dto';
+import { PagedResponseDto, PaginationDto } from './dto/pagination.dto';
 import { OrderService } from './order.service';
 
 interface RequestUser {
@@ -48,66 +49,55 @@ interface RequestUser {
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
-  @Post()
-  @UseGuards(AuthGuard)
-  @ApiOperation({ summary: 'Tạo đơn hàng mới (từ danh sách sản phẩm)' })
-  @ApiCreatedResponse({
-    description: 'Đơn hàng đã được tạo thành công',
-    type: OrderResponseDto,
-  })
-  async createOrder(
-    @Request() req,
-    @Body() createOrderDto: CreateOrderDto,
-  ): Promise<OrderResponseDto> {
-    const user = req.user as RequestUser;
-    return this.orderService.createOrder(user.id, createOrderDto);
-  }
-
-  @Post('from-cart')
-  @UseGuards(AuthGuard)
-  @ApiOperation({ summary: 'Tạo đơn hàng từ giỏ hàng' })
-  @ApiCreatedResponse({
-    description: 'Đơn hàng đã được tạo thành công từ giỏ hàng',
-    type: OrderResponseDto,
-  })
-  async createOrderFromCart(
-    @Request() req,
-    @Body() createOrderDto: CreateOrderDto,
-  ): Promise<OrderResponseDto> {
-    const user = req.user as RequestUser;
-    if (!createOrderDto.items.some(item => item.cartItemId)) {
-      throw new BadRequestException('Cần cung cấp ít nhất một cartItemId để đặt hàng từ giỏ hàng');
-    }
-    return this.orderService.createOrder(user.id, createOrderDto);
-  }
-
   @Get()
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Lấy danh sách đơn hàng (có phân trang)' })
-  @ApiQuery({ name: 'currentPage', required: false, type: Number, description: 'Trang hiện tại' })
-  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'Số mục trên mỗi trang' })
+  @ApiQuery({
+    name: 'currentPage',
+    required: false,
+    type: Number,
+    description: 'Trang hiện tại',
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    type: Number,
+    description: 'Số mục trên mỗi trang',
+  })
   @ApiOkResponse({
     description: 'Danh sách đơn hàng đã tìm thấy',
     type: PagedResponseDto,
   })
   async getAllOrders(
-    @Query() pagination: PaginationDto
+    @Query() pagination: PaginationDto,
   ): Promise<PagedResponseDto<OrderResponseDto>> {
     return this.orderService.getAllOrders(pagination);
   }
 
   @Get('my-orders')
   @UseGuards(AuthGuard)
-  @ApiOperation({ summary: 'Lấy danh sách đơn hàng của người dùng (có phân trang)' })
-  @ApiQuery({ name: 'currentPage', required: false, type: Number, description: 'Trang hiện tại' })
-  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: 'Số mục trên mỗi trang' })
+  @ApiOperation({
+    summary: 'Lấy danh sách đơn hàng của người dùng (có phân trang)',
+  })
+  @ApiQuery({
+    name: 'currentPage',
+    required: false,
+    type: Number,
+    description: 'Trang hiện tại',
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    type: Number,
+    description: 'Số mục trên mỗi trang',
+  })
   @ApiOkResponse({
     description: 'Danh sách đơn hàng đã tìm thấy',
     type: PagedResponseDto,
   })
   async getUserOrders(
     @Request() req,
-    @Query() pagination: PaginationDto
+    @Query() pagination: PaginationDto,
   ): Promise<PagedResponseDto<OrderResponseDto>> {
     const user = req.user as RequestUser;
     return this.orderService.getUserOrders(user.id, pagination);
@@ -131,13 +121,11 @@ export class OrderController {
   ): Promise<OrderResponseDto> {
     try {
       const user = req.user as RequestUser;
-      // If admin, allow access to any order
       if (user.role === UserRole.ADMIN) {
         const order = await this.orderService.getOrderById(id, user.id);
         return order;
       }
 
-      // For regular users, only allow access to their own orders
       return await this.orderService.getOrderById(id, user.id);
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -150,6 +138,89 @@ export class OrderController {
       }
       throw error;
     }
+  }
+
+  @Post('check-voucher')
+  @Roles(UserRole.CUSTOMER)
+  @ApiOperation({ summary: 'Kiểm tra mã voucher cho đơn hàng' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        voucherId: {
+          type: 'string',
+          example: '60d5ec9d2b5b82a5d5000001',
+          description: 'ID của voucher (không phải code)',
+        },
+        orderTotal: { type: 'number', example: 100000 },
+        productIds: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['60d5ec9d2b5b82a5d5000002'],
+        },
+      },
+      required: ['voucherId', 'orderTotal'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Kết quả kiểm tra voucher',
+    schema: {
+      type: 'object',
+      properties: {
+        isValid: { type: 'boolean' },
+        message: { type: 'string' },
+        voucher: { 
+          type: 'object',
+          nullable: true 
+        },
+        discountAmount: { 
+          type: 'number',
+          nullable: true 
+        },
+      },
+    },
+  })
+  async checkVoucher(
+    @Body()
+    data: { voucherId: string; orderTotal: number; productIds?: string[] },
+    @Req() req,
+  ) {
+    return await this.orderService.checkVoucher(
+      req.user.id,
+      data.voucherId,
+      data.orderTotal,
+      data.productIds,
+    );
+  }
+
+  @Post()
+  @Roles(UserRole.CUSTOMER)
+  @ApiOperation({ summary: 'Tạo đơn hàng mới' })
+  @ApiBody({ type: CreateOrderDto })
+  @ApiResponse({ status: 201, description: 'Đơn hàng được tạo thành công' })
+  async createOrder(@Body() createOrderDto: CreateOrderDto, @Req() req) {
+    return this.orderService.createOrder(req.user.id, createOrderDto);
+  }
+
+  @Post('from-cart')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Tạo đơn hàng từ giỏ hàng' })
+  @ApiCreatedResponse({
+    description: 'Đơn hàng đã được tạo thành công từ giỏ hàng',
+    type: OrderResponseDto,
+  })
+  async createOrderFromCart(
+    @Request() req,
+    @Body() createOrderDto: CreateOrderDto,
+  ): Promise<OrderResponseDto> {
+    const user = req.user as RequestUser;
+    if (!createOrderDto.items.some((item) => item.cartItemId)) {
+      throw new BadRequestException(
+        'Cần cung cấp ít nhất một cartItemId để đặt hàng từ giỏ hàng',
+      );
+    }
+    return this.orderService.createOrder(user.id, createOrderDto);
   }
 
   @Put(':id/status')
@@ -208,11 +279,9 @@ export class OrderController {
     @Param('id') id: string,
     @Request() req: Request,
   ): Promise<CancelOrderResponseDto> {
-    // Check if the user is the owner of the order or an admin
     try {
       const user = req['user'];
       if (user.role !== UserRole.ADMIN) {
-        // Verify ownership
         await this.orderService.getOrderById(id, user.id);
       }
       return this.orderService.cancelOrder(id);

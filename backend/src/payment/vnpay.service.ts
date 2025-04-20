@@ -1,16 +1,16 @@
+import { PrismaService } from '@/database/prisma.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as crypto from 'crypto';
-import * as qs from 'qs';
-import * as moment from 'moment';
 import axios from 'axios';
+import * as crypto from 'crypto';
+import * as moment from 'moment';
+import * as qs from 'qs';
 import { CreateVnpayPaymentDto } from './dto/create-vnpay-payment.dto';
 import { HandleVnpayReturnDto } from './dto/handle-vnpay-return.dto';
-import { VnpayPaymentResponseDto } from './dto/vnpay-response.dto';
 import { VnpayIpnDto } from './dto/vnpay-ipn.dto';
 import { VnpayQueryDrDto } from './dto/vnpay-query-dr.dto';
 import { VnpayRefundDto } from './dto/vnpay-refund.dto';
-import { PrismaService } from '@/database/prisma.service';
+import { VnpayPaymentResponseDto } from './dto/vnpay-response.dto';
 
 @Injectable()
 export class VnpayService {
@@ -130,7 +130,7 @@ export class VnpayService {
     return {
       isSuccess,
       isValidSignature,
-      amount: parseInt(vnpParams.vnp_Amount) / 100, // Chuyển về đơn vị VND
+      amount: parseInt(vnpParams.vnp_Amount) / 100,
       orderId: vnpParams.vnp_TxnRef,
       transactionId: vnpParams.vnp_TransactionNo,
       bankCode: vnpParams.vnp_BankCode,
@@ -206,7 +206,6 @@ export class VnpayService {
     const rspCode = vnpParams.vnp_ResponseCode;
     const amount = parseInt(vnpParams.vnp_Amount) / 100;
 
-    // Kiểm tra chữ ký
     if (secureHash !== signed) {
       return {
         isSuccess: false,
@@ -224,7 +223,6 @@ export class VnpayService {
       };
     }
 
-    // Kiểm tra đơn hàng tồn tại
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: { payment: true },
@@ -247,7 +245,6 @@ export class VnpayService {
       };
     }
 
-    // Kiểm tra số tiền
     if (amount !== order.payment?.amount) {
       return {
         isSuccess: false,
@@ -265,7 +262,6 @@ export class VnpayService {
       };
     }
 
-    // Kiểm tra trạng thái thanh toán
     if (order.payment?.status !== 'PENDING') {
       return {
         isSuccess: false,
@@ -283,7 +279,6 @@ export class VnpayService {
       };
     }
 
-    // Cập nhật trạng thái thanh toán
     if (rspCode === '00') {
       await this.prisma.payment.update({
         where: { orderId },
@@ -348,10 +343,7 @@ export class VnpayService {
     };
 
     try {
-      const response = await axios.post(
-        `${this.vnpApi}`,
-        dataObj,
-      );
+      const response = await axios.post(`${this.vnpApi}`, dataObj);
 
       if (response.data) {
         const vnpResponse = response.data;
@@ -401,7 +393,9 @@ export class VnpayService {
     ].join('|');
 
     const hmac = crypto.createHmac('sha512', this.vnpHashSecret);
-    const vnp_SecureHash = hmac.update(Buffer.from(data, 'utf-8')).digest('hex');
+    const vnp_SecureHash = hmac
+      .update(Buffer.from(data, 'utf-8'))
+      .digest('hex');
 
     const dataObj = {
       vnp_RequestId,

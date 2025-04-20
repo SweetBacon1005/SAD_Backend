@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-// DTO cho Cart Item
 export class CartItemResponseDto {
   @ApiProperty({
     description: 'ID của item trong giỏ hàng',
@@ -98,7 +97,6 @@ export class CartItemResponseDto {
   totalPrice: number;
 }
 
-// DTO cho Cart
 export class CartResponseDto {
   @ApiProperty({
     description: 'ID giỏ hàng',
@@ -150,7 +148,6 @@ export class CartResponseDto {
   totalAmount: number;
 }
 
-// DTO cho Cart Item đã được thêm vào giỏ
 export class AddCartItemResponseDto {
   @ApiProperty({
     description: 'ID của item trong giỏ hàng',
@@ -238,13 +235,10 @@ export class AddCartItemResponseDto {
   totalPrice: number;
 }
 
-// DTO cho Clear Cart Response
 export class ClearCartResponseDto extends CartResponseDto {}
 
-// DTO cho Update Cart Response
 export class UpdateCartResponseDto extends CartResponseDto {}
 
-// DTO cho Thêm Item Response
 export class RemoveCartItemResponseDto {
   @ApiProperty({
     description: 'ID của item đã xóa',

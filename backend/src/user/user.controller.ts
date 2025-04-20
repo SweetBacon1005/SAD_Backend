@@ -1,4 +1,3 @@
-// src/user/user.controller.ts
 import {
   Body,
   Controller,
@@ -111,7 +110,6 @@ export class UserController {
   ): Promise<UserResponseDto> {
     const { id: userId, role } = req['user'];
 
-    // Check if user is admin or manager, or if they're trying to access their own profile
     if (role !== UserRole.ADMIN && role !== UserRole.MANAGER && userId !== id) {
       throw new ForbiddenException('You can only access your own profile');
     }
@@ -144,12 +142,10 @@ export class UserController {
   ): Promise<UserResponseDto> {
     const { id: userId, role } = req['user'];
 
-    // Check if user is admin/manager or if they're trying to update their own profile
     if (role !== UserRole.ADMIN && role !== UserRole.MANAGER && userId !== id) {
       throw new ForbiddenException('You can only update your own user data');
     }
 
-    // Only admin can change user roles
     if (updateUserDto.role && role !== UserRole.ADMIN) {
       throw new ForbiddenException('Only administrators can change user roles');
     }
@@ -201,8 +197,7 @@ export class UserController {
   ): Promise<ToggleActiveResponseDto> {
     return this.userService.toggleUserActive(id);
   }
-
-  // Address endpoints
+  
   @Get(':userId/addresses')
   @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.CUSTOMER)
   @ApiOperation({ summary: 'Lấy danh sách địa chỉ của người dùng' })
@@ -284,7 +279,6 @@ export class UserController {
     @Param('addressId') addressId: string,
     @Request() req: Request,
   ): Promise<DeleteAddressResponseDto> {
-    // Check if user is admin/manager or if they're trying to delete their own address
     const { id, role } = req['user'];
     if (role !== UserRole.ADMIN && role !== UserRole.MANAGER && id !== userId) {
       throw new ForbiddenException('You can only delete your own addresses');
@@ -308,7 +302,6 @@ export class UserController {
     @Param('addressId') addressId: string,
     @Request() req: Request,
   ): Promise<AddressResponseDto> {
-    // Check if user is admin/manager or if they're trying to update their own address
     const { id, role } = req['user'];
     if (role !== UserRole.ADMIN && role !== UserRole.MANAGER && id !== userId) {
       throw new ForbiddenException(
@@ -335,7 +328,6 @@ export class UserController {
     @Param('userId') userId: string,
     @Request() req: Request,
   ): Promise<AddressResponseDto> {
-    // Check if user is admin/manager or if they're trying to get their own default address
     const { id, role } = req['user'];
     if (role !== UserRole.ADMIN && role !== UserRole.MANAGER && id !== userId) {
       throw new ForbiddenException(

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { PaymentMethod } from '@prisma/client';
 
 export class CreatePaymentDto {
@@ -12,14 +12,6 @@ export class CreatePaymentDto {
   orderId: string;
 
   @ApiProperty({
-    description: 'Số tiền thanh toán (đơn vị VNĐ)',
-    example: 150000,
-  })
-  @IsNotEmpty({ message: 'Số tiền không được để trống' })
-  @IsNumber({}, { message: 'Số tiền phải là số' })
-  amount: number;
-
-  @ApiProperty({
     description: 'Phương thức thanh toán',
     enum: PaymentMethod,
     example: PaymentMethod.VNPAY,
@@ -28,11 +20,11 @@ export class CreatePaymentDto {
   @IsEnum(PaymentMethod, { message: 'Phương thức thanh toán không hợp lệ' })
   paymentMethod: PaymentMethod;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Thông tin đơn hàng',
     example: 'Thanh toán đơn hàng #12345',
-    required: false,
   })
+  @IsOptional()
   @IsString({ message: 'Thông tin đơn hàng phải là chuỗi' })
   orderInfo?: string;
 } 

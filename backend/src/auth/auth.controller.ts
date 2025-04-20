@@ -10,7 +10,6 @@ import {
 import { UserRole } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { AuthResponseDto } from './dto/auth-response.dto';
-import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SignInDto } from './dto/sign-in.dto';
 import { SignUpDto } from './dto/sign-up.dto';
@@ -35,10 +34,18 @@ export class AuthController {
   @ApiResponse({
     status: 201,
     description: 'Đăng ký thành công',
-    type: AuthResponseDto,
+    schema: {
+      properties: {
+        message: {
+          type: 'string',
+          example:
+            'Đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản.',
+        },
+      },
+    },
   })
   @ApiResponse({ status: 409, description: 'Email đã tồn tại' })
-  async signUp(@Body() payload: SignUpDto): Promise<AuthResponseDto> {
+  async signUp(@Body() payload: SignUpDto): Promise<{ message: string }> {
     return this.authService.signUp(payload);
   }
 
@@ -59,15 +66,6 @@ export class AuthController {
   }
 
   @Public()
-  @Post('forgot-password')
-  @ApiOperation({ summary: 'Yêu cầu khôi phục mật khẩu' })
-  @ApiResponse({ status: 200, description: 'Đã gửi email khôi phục mật khẩu' })
-  @ApiResponse({ status: 400, description: 'Email không tồn tại' })
-  async forgotPassword(@Body() payload: ForgotPasswordDto): Promise<void> {
-    return this.authService.forgotPassword(payload);
-  }
-
-  @Public()
   @Post('send-verification-otp')
   @ApiOperation({ summary: 'Gửi mã OTP xác thực email' })
   @ApiResponse({ status: 200, description: 'Đã gửi mã OTP xác thực email' })
@@ -81,12 +79,18 @@ export class AuthController {
   @Public()
   @Post('verify-email-otp')
   @ApiOperation({ summary: 'Xác thực email bằng mã OTP' })
-  @ApiResponse({ status: 200, description: 'Xác thực email thành công' })
+  @ApiResponse({
+    status: 200,
+    description: 'Xác thực email thành công',
+    type: AuthResponseDto,
+  })
   @ApiResponse({
     status: 400,
     description: 'Mã OTP không hợp lệ hoặc đã hết hạn',
   })
-  async verifyEmailOTP(@Body() payload: VerifyEmailOtpDto): Promise<void> {
+  async verifyEmailOTP(
+    @Body() payload: VerifyEmailOtpDto,
+  ): Promise<AuthResponseDto> {
     return this.authService.verifyEmailOTP(payload);
   }
 

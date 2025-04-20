@@ -62,10 +62,8 @@ export class MailService {
 
   async sendMail(options: MailOptions): Promise<void> {
     try {
-      // Prepare email content
       const html = this.loadTemplate(options.template, options.context);
 
-      // Send email
       await this.transporter.sendMail({
         from: {
           name: this.configService.get<string>(
@@ -94,27 +92,47 @@ export class MailService {
 
   async sendPasswordResetEmail(
     email: string,
-    firstName: string,
-    resetLink: string,
+    name: string,
+    otp: string,
+    expirationMinutes: number,
   ): Promise<void> {
     await this.sendMail({
       to: email,
       subject: 'Password Reset Request',
-      template: 'password-reset',
+      template: 'password-reset-otp',
       context: {
-        firstName,
-        resetLink,
+        name,
+        otp,
+        expirationMinutes,
       },
     });
   }
 
-  async sendWelcomeEmail(email: string, firstName: string): Promise<void> {
+  async sendEmailVerificationEmail(
+    email: string,
+    name: string,
+    otp: string,
+    expirationMinutes: number,
+  ): Promise<void> {
+    await this.sendMail({
+      to: email,
+      subject: 'Email Verification',
+      template: 'email-otp',
+      context: {
+        name,
+        otp,
+        expirationMinutes,
+      },
+    });
+  }
+
+  async sendWelcomeEmail(email: string, name: string): Promise<void> {
     await this.sendMail({
       to: email,
       subject: 'Welcome to Our Platform',
       template: 'welcome',
       context: {
-        firstName,
+        name,
       },
     });
   }

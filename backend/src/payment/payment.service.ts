@@ -19,7 +19,7 @@ import { VnpayQueryDrDto } from './dto/vnpay-query-dr.dto';
 import { VnpayRefundDto } from './dto/vnpay-refund.dto';
 import { VnpayPaymentResponseDto } from './dto/vnpay-response.dto';
 import { VnpayService } from './vnpay.service';
-
+import { PaymentDataDto } from './dto/payment-data.dto';
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
@@ -30,10 +30,11 @@ export class PaymentService {
   ) {}
 
   async create(
-    createPaymentDto: CreatePaymentDto,
+    payload: CreatePaymentDto,
+    userId?: string,
   ): Promise<PaymentResponseDto> {
     const order = await this.prisma.order.findUnique({
-      where: { id: createPaymentDto.orderId },
+      where: { id: payload.orderId },
       include: { payment: true },
     });
 
@@ -41,36 +42,44 @@ export class PaymentService {
       throw new NotFoundException('Đơn hàng không tồn tại');
     }
 
-    if (order.payment) {
-      if (order.payment.status === PaymentStatus.PAID) {
-        throw new BadRequestException(
-          'Đơn hàng này đã được thanh toán thành công',
-        );
-      }
+    if (userId && order.userId !== userId) {
+      this.logger.error(`Người dùng ${userId} không có quyền thanh toán đơn hàng ${order.id}`);
+      throw new BadRequestException('Bạn không có quyền thanh toán đơn hàng này');
     }
 
-    let paymentData: any = {
-      orderId: createPaymentDto.orderId,
+    if (order.paymentStatus === PaymentStatus.PAID) {
+      throw new BadRequestException('Đơn hàng này đã được thanh toán thành công');
+    }
+
+    const paymentAmount = order.total;
+    
+    if (paymentAmount <= 0) {
+      throw new BadRequestException('Số tiền thanh toán không hợp lệ');
+    }
+
+    const paymentData = {
+      orderId: order.id,
       status: PaymentStatus.PENDING,
-      paymentMethod: createPaymentDto.paymentMethod,
-      amount: createPaymentDto.amount,
+      paymentMethod: payload.paymentMethod,
+      amount: paymentAmount,
+      orderInfo: payload.orderInfo || `Thanh toán đơn hàng #${order.id}`,
     };
 
     let payment = await this.createOrUpdatePayment(paymentData);
-    let paymentResponse: PaymentResponseDto =
-      this.mapToPaymentResponseDto(payment);
+    let paymentResponse: PaymentResponseDto = this.mapToPaymentResponseDto(payment);
 
-    if (createPaymentDto.paymentMethod === PaymentMethod.VNPAY) {
+    if (payload.paymentMethod === PaymentMethod.VNPAY) {
       const paymentUrl = await this.vnpayService.createPaymentUrl({
-        orderId: createPaymentDto.orderId,
-        amount: createPaymentDto.amount,
+        orderId: order.id,
+        amount: paymentAmount,
+        orderInfo: paymentData.orderInfo,
       });
 
       const transactionData: CreatePaymentTransactionDto = {
         paymentId: payment.id,
         transactionId: `VNPAY_${Date.now()}`,
         status: TransactionStatus.PENDING,
-        amount: createPaymentDto.amount,
+        amount: paymentAmount,
         paymentMethod: PaymentMethod.VNPAY,
         provider: 'VNPAY',
         providerData: {
@@ -82,6 +91,14 @@ export class PaymentService {
       paymentResponse.paymentUrl = paymentUrl;
     }
 
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        paymentMethod: payload.paymentMethod,
+      },
+    });
+
+    this.logger.log(`Tạo thanh toán mới cho đơn hàng ${order.id} với số tiền ${paymentAmount}`);
     return paymentResponse;
   }
 
@@ -118,7 +135,6 @@ export class PaymentService {
       throw new NotFoundException('Đơn hàng không tồn tại');
     }
 
-    // Cập nhật thanh toán
     let paymentStatus: PaymentStatus = PaymentStatus.PENDING;
     let transactionStatus: TransactionStatus = TransactionStatus.PENDING;
 
@@ -126,7 +142,6 @@ export class PaymentService {
       paymentStatus = PaymentStatus.PAID;
       transactionStatus = TransactionStatus.SUCCESS;
 
-      // Cập nhật trạng thái đơn hàng
       await this.prisma.order.update({
         where: { id: orderId },
         data: {
@@ -138,7 +153,6 @@ export class PaymentService {
       transactionStatus = TransactionStatus.FAILED;
     }
 
-    // Cập nhật thông tin thanh toán
     const payment = await this.prisma.payment.update({
       where: { orderId },
       data: {
@@ -199,7 +213,6 @@ export class PaymentService {
       throw new NotFoundException('Đơn hàng không tồn tại');
     }
 
-    // Cập nhật thanh toán
     let paymentStatus: PaymentStatus = PaymentStatus.PENDING;
     let transactionStatus: TransactionStatus = TransactionStatus.PENDING;
 
@@ -207,7 +220,6 @@ export class PaymentService {
       paymentStatus = PaymentStatus.PAID;
       transactionStatus = TransactionStatus.SUCCESS;
 
-      // Cập nhật trạng thái đơn hàng
       await this.prisma.order.update({
         where: { id: orderId },
         data: {
@@ -219,7 +231,6 @@ export class PaymentService {
       transactionStatus = TransactionStatus.FAILED;
     }
 
-    // Cập nhật thông tin thanh toán
     const payment = await this.prisma.payment.update({
       where: { orderId },
       data: {
@@ -303,7 +314,6 @@ export class PaymentService {
     }
 
     if (vnpayResponse.isSuccess) {
-      // Cập nhật trạng thái thanh toán
       await this.prisma.payment.update({
         where: { orderId: refundDto.orderId },
         data: {
@@ -311,7 +321,6 @@ export class PaymentService {
         },
       });
 
-      // Tạo giao dịch hoàn tiền
       await this.prisma.paymentTransaction.create({
         data: {
           paymentId: order.payment.id,
@@ -331,9 +340,6 @@ export class PaymentService {
     return vnpayResponse;
   }
 
-  /**
-   * Lấy thông tin thanh toán
-   */
   async findOne(id: string): Promise<PaymentResponseDto> {
     const payment = await this.prisma.payment.findUnique({
       where: { id },
@@ -365,9 +371,9 @@ export class PaymentService {
   }
 
   private async createOrUpdatePayment(
-    paymentData: any,
+    payload: PaymentDataDto,
   ): Promise<PaymentResponseDto> {
-    const { orderId, ...updateData } = paymentData;
+    const { orderId, orderInfo, ...updateData } = payload;
 
     const existingPayment = await this.prisma.payment.findUnique({
       where: { orderId },
@@ -388,7 +394,10 @@ export class PaymentService {
       });
     } else {
       payment = await this.prisma.payment.create({
-        data: paymentData,
+        data: {
+          orderId,
+          ...updateData,
+        },
         include: {
           transactions: true,
         },
@@ -397,13 +406,16 @@ export class PaymentService {
       await this.prisma.order.update({
         where: { id: orderId },
         data: {
-          paymentMethod: paymentData.paymentMethod,
-          paymentStatus: paymentData.status,
+          paymentMethod: payload.paymentMethod,
+          paymentStatus: payload.status,
         },
       });
     }
 
-    return this.mapToPaymentResponseDto(payment);
+    const paymentResponse = this.mapToPaymentResponseDto(payment);
+    paymentResponse.orderInfo = orderInfo || '';
+    
+    return paymentResponse;
   }
 
   private async createTransaction(
