@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { OrderStatus, PaymentStatus, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { VoucherService } from '../voucher/voucher.service';
 import {
   CancelOrderResponseDto,
   OrderResponseDto,
@@ -14,7 +15,6 @@ import {
 import { CreateOrderDto } from './dto/order.dto';
 import { PagedResponseDto, PaginationDto } from './dto/pagination.dto';
 
-// Định nghĩa interface ProductVariant
 interface ProductVariant {
   id: string;
   name: string;
@@ -29,7 +29,6 @@ interface ProductVariant {
   images: string[];
 }
 
-// Định nghĩa interface Product
 interface Product {
   id: string;
   name: string;
@@ -40,16 +39,50 @@ interface Product {
 
 @Injectable()
 export class OrderService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly voucherService: VoucherService,
+  ) {}
+
+  async checkVoucher(
+    userId: string,
+    voucherId: string,
+    orderTotal: number,
+    productIds?: string[],
+  ): Promise<{
+    isValid: boolean;
+    voucher?: any;
+    discountAmount?: number;
+    message?: string;
+  }> {
+    try {
+      const voucher = await this.prisma.voucher.findUnique({
+        where: { id: voucherId },
+      });
+
+      if (!voucher) {
+        return { isValid: false, message: 'Không tìm thấy voucher' };
+      }
+
+      return this.voucherService.validateVoucher(
+        voucher.code,
+        orderTotal,
+        userId,
+        productIds,
+      );
+    } catch (error) {
+      return {
+        isValid: false,
+        message: error.message || 'Lỗi khi kiểm tra voucher',
+      };
+    }
+  }
 
   async createOrder(
     userId: string,
     payload: CreateOrderDto,
   ): Promise<OrderResponseDto> {
-    const orderNumber = this.generateOrderNumber();
-
     return this.prisma.$transaction(async (prisma) => {
-      // Lấy thông tin giỏ hàng
       const cart = await prisma.cart.findUnique({
         where: { userId },
         include: {
@@ -65,9 +98,10 @@ export class OrderService {
         },
       });
 
-      const cartItemsMap = cart ? new Map(cart.items.map((item) => [item.id, item])) : new Map();
+      const cartItemsMap = cart
+        ? new Map(cart.items.map((item) => [item.id, item]))
+        : new Map();
 
-      // Xử lý các sản phẩm từ giỏ hàng hoặc productId/variantId
       const productsToCheck = await Promise.all(
         payload.items.map(async (item) => {
           // Trường hợp 1: Có cartItemId
@@ -81,7 +115,7 @@ export class OrderService {
 
             const product = cartItem.product;
             let selectedVariant: ProductVariant | null = null;
-            
+
             if (cartItem.variantId) {
               selectedVariant =
                 product.variants.find((v) => v.id === cartItem.variantId) ||
@@ -113,7 +147,7 @@ export class OrderService {
               requestedQty: item.quantity,
               selectedVariant,
             };
-          } 
+          }
           // Trường hợp 2: Chỉ có productId và variantId (tùy chọn)
           else {
             const product = await prisma.product.findUnique({
@@ -131,7 +165,7 @@ export class OrderService {
             if (item.variantId) {
               selectedVariant =
                 product.variants.find((v) => v.id === item.variantId) || null;
-                
+
               if (!selectedVariant) {
                 throw new NotFoundException(
                   `Không tìm thấy biến thể với ID ${item.variantId} cho sản phẩm ${item.productId}`,
@@ -161,7 +195,6 @@ export class OrderService {
         }),
       );
 
-      // Tính subtotal và total
       let subtotal = 0;
       const orderItems = payload.items.map((item) => {
         const productInfo = productsToCheck.find((p) => {
@@ -175,6 +208,8 @@ export class OrderService {
         const selectedVariant = productInfo?.selectedVariant;
         const cartItem = productInfo?.cartItem;
 
+        const quantity = item.quantity || 1;
+
         let price;
         if (cartItem) {
           price = cartItem.selectedPrice;
@@ -184,21 +219,60 @@ export class OrderService {
             : product?.basePrice || 0;
         }
 
-        subtotal += price * item.quantity;
+        subtotal += price * quantity;
 
         return {
           productId: product?.id || '',
           variantId: selectedVariant?.id,
-          quantity: item.quantity,
+          quantity: quantity,
           price: price,
           attributes: selectedVariant?.attributes || null,
         };
       });
 
-      // For simplicity, total = subtotal (no tax, shipping, etc.)
-      const total = subtotal;
+      let total = subtotal;
 
-      // Create shipping info
+      let appliedVoucherId: string | null = null;
+      let discountAmount = 0;
+
+      if (payload.voucherId) {
+        try {
+          const productIds = orderItems.map((item) => item.productId);
+
+          const voucher = await prisma.voucher.findUnique({
+            where: { id: payload.voucherId },
+          });
+
+          if (!voucher) {
+            throw new BadRequestException('Không tìm thấy voucher');
+          }
+
+          const validationResult = await this.voucherService.validateVoucher(
+            voucher.code,
+            subtotal,
+            userId,
+            productIds,
+          );
+
+          if (validationResult.isValid && validationResult.voucher) {
+            discountAmount = validationResult.discountAmount || 0;
+            total = subtotal - discountAmount;
+
+            if (total < 0) total = 0;
+
+            appliedVoucherId = payload.voucherId;
+          } else {
+            throw new BadRequestException(
+              validationResult.message || 'Voucher không hợp lệ',
+            );
+          }
+        } catch (error) {
+          throw new BadRequestException(
+            error.message || 'Voucher không hợp lệ hoặc không thể áp dụng',
+          );
+        }
+      }
+
       const shippingInfo = await prisma.shippingInfo.create({
         data: {
           addressLine: payload.shippingInfo.addressLine,
@@ -206,12 +280,13 @@ export class OrderService {
         },
       });
 
-      // Create the order
       const order = await prisma.order.create({
         data: {
           userId,
           subtotal,
           total,
+          discountAmount,
+          voucherId: appliedVoucherId,
           status: OrderStatus.PENDING,
           paymentStatus: PaymentStatus.PENDING,
           paymentMethod: payload.paymentMethod,
@@ -239,7 +314,10 @@ export class OrderService {
         },
       });
 
-      // Cập nhật số lượng tồn kho sau khi tạo đơn hàng
+      if (appliedVoucherId) {
+        await this.voucherService.increaseVoucherUsage(appliedVoucherId);
+      }
+
       await Promise.all(
         payload.items.map(async (item) => {
           const productInfo = productsToCheck.find((p) => {
@@ -251,15 +329,16 @@ export class OrderService {
 
           const selectedVariant = productInfo?.selectedVariant;
 
+          const quantity = item.quantity || 1;
+
           if (selectedVariant) {
             await prisma.productVariant.update({
               where: { id: selectedVariant.id },
               data: {
-                quantity: { decrement: item.quantity },
+                quantity: { decrement: quantity },
               },
             });
           } else {
-            // Cập nhật số lượng tồn kho của sản phẩm nếu không có variant
             const product = productInfo?.product as any;
             if (
               product &&
@@ -269,7 +348,9 @@ export class OrderService {
               await prisma.product.update({
                 where: { id: product.id },
                 data: {
-                  // Cập nhật quantity nếu có trong model
+                  quantity: {
+                    decrement: quantity,
+                  },
                 },
               });
             }
@@ -277,7 +358,6 @@ export class OrderService {
         }),
       );
 
-      // Xóa các sản phẩm đã đặt hàng khỏi giỏ hàng nếu có cartItemId
       const cartItemsToRemove = payload.items
         .filter((item) => item.cartItemId)
         .map((item) => item.cartItemId)
@@ -297,9 +377,11 @@ export class OrderService {
     });
   }
 
-  async getAllOrders(pagination: PaginationDto = { currentPage: 1, pageSize: 10 }): Promise<PagedResponseDto<OrderResponseDto>> {
-    const page = pagination.currentPage || 1;
-    const limit = pagination.pageSize || 10;
+  async getAllOrders(
+    payload: PaginationDto,
+  ): Promise<PagedResponseDto<OrderResponseDto>> {
+    const page = Number(payload.currentPage) || 1;
+    const limit = Number(payload.pageSize) || 10;
     const skip = (page - 1) * limit;
 
     const [orders, totalItems] = await Promise.all([
@@ -339,9 +421,12 @@ export class OrderService {
     };
   }
 
-  async getUserOrders(userId: string, pagination: PaginationDto = { currentPage: 1, pageSize: 10 }): Promise<PagedResponseDto<OrderResponseDto>> {
-    const page = pagination.currentPage || 1;
-    const limit = pagination.pageSize || 10;
+  async getUserOrders(
+    userId: string,
+    payload: PaginationDto,
+  ): Promise<PagedResponseDto<OrderResponseDto>> {
+    const page = Number(payload.currentPage) || 1;
+    const limit = Number(payload.pageSize) || 10;
     const skip = (page - 1) * limit;
 
     const [orders, totalItems] = await Promise.all([
@@ -420,7 +505,6 @@ export class OrderService {
       throw new NotFoundException('Order not found');
     }
 
-    // Validate state transitions
     if (
       order.status === OrderStatus.CANCELLED &&
       status !== OrderStatus.CANCELLED
@@ -440,15 +524,12 @@ export class OrderService {
       );
     }
 
-    // Update order status and related fields
     let updateData: any = { status };
 
-    // If new status is SHIPPED, set shippedAt date
     if (status === OrderStatus.SHIPPED) {
       updateData.shippedAt = new Date();
     }
 
-    // If new status is DELIVERED, set deliveredAt date
     if (status === OrderStatus.DELIVERED) {
       updateData.deliveredAt = new Date();
     }
@@ -479,13 +560,21 @@ export class OrderService {
       throw new NotFoundException('Order not found');
     }
 
-    // Update order payment status
+    let orderStatus = order.status;
+    if (status === PaymentStatus.PAID && order.status === OrderStatus.PENDING) {
+      orderStatus = OrderStatus.PROCESSING;
+    } else if (status === PaymentStatus.FAILED) {
+      orderStatus = OrderStatus.CANCELLED;
+    }
+
     const updatedOrder = await this.prisma.order.update({
       where: { id },
-      data: { paymentStatus: status },
+      data: { 
+        paymentStatus: status,
+        status: orderStatus
+      },
     });
 
-    // Update payment entity if it exists
     if (order.payment) {
       await this.prisma.payment.update({
         where: { id: order.payment.id },
@@ -496,7 +585,7 @@ export class OrderService {
 
       if (transactionId) {
         const transaction = await this.prisma.paymentTransaction.findFirst({
-          where: { paymentId: order.payment.id }
+          where: { paymentId: order.payment.id },
         });
 
         if (transaction) {
@@ -504,10 +593,13 @@ export class OrderService {
             where: { id: transaction.id },
             data: {
               transactionId,
-              status: status === PaymentStatus.PAID ? TransactionStatus.SUCCESS : 
-                      status === PaymentStatus.FAILED ? TransactionStatus.FAILED : 
-                      TransactionStatus.PENDING
-            }
+              status:
+                status === PaymentStatus.PAID
+                  ? TransactionStatus.SUCCESS
+                  : status === PaymentStatus.FAILED
+                    ? TransactionStatus.FAILED
+                    : TransactionStatus.PENDING,
+            },
           });
         }
       }
@@ -534,18 +626,32 @@ export class OrderService {
         throw new NotFoundException('Order not found');
       }
 
-      // Cannot cancel orders that are already delivered
       if (order.status === OrderStatus.DELIVERED) {
         throw new BadRequestException('Cannot cancel delivered orders');
       }
 
-      // Update order status to CANCELLED
       const updatedOrder = await prisma.order.update({
         where: { id },
         data: { status: OrderStatus.CANCELLED },
       });
 
-      // Hoàn trả số lượng tồn kho cho các variant
+      if (order.voucherId) {
+        const voucher = await prisma.voucher.findUnique({
+          where: { id: order.voucherId },
+        });
+        
+        if (voucher && voucher.usageCount > 0) {
+          await prisma.voucher.update({
+            where: { id: order.voucherId },
+            data: {
+              usageCount: {
+                decrement: 1,
+              },
+            },
+          });
+        }
+      }
+
       await Promise.all(
         order.items.map(async (item) => {
           if (item.variantId) {
@@ -571,13 +677,5 @@ export class OrderService {
         updatedAt: updatedOrder.updatedAt,
       };
     });
-  }
-
-  private generateOrderNumber(): string {
-    const timestamp = new Date().getTime().toString();
-    const random = Math.floor(Math.random() * 1000)
-      .toString()
-      .padStart(3, '0');
-    return `ORD-${timestamp}-${random}`;
   }
 }

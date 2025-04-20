@@ -1,4 +1,3 @@
-// update-cart-item.dto.ts
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
 import { CartItemAttributesDto } from './cart-attributes.dto';

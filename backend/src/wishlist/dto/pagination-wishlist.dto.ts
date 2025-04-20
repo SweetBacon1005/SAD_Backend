@@ -1,6 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, IsNumber, Min, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { WishlistResponseDto } from './wishlist-response.dto';
 
 export enum WishlistSortField {
@@ -54,7 +61,7 @@ export class WishlistFilterDto {
     description: 'Trang hiện tại',
     example: 1,
     default: 1,
-    minimum: 1
+    minimum: 1,
   })
   @IsNumber()
   @IsOptional()
@@ -66,7 +73,7 @@ export class WishlistFilterDto {
     description: 'Số danh sách trên mỗi trang',
     example: 10,
     default: 10,
-    minimum: 1
+    minimum: 1,
   })
   @IsNumber()
   @IsOptional()
@@ -107,7 +114,6 @@ export class WishlistListResponseDto {
   timestamp: string;
 }
 
-// DTO cho kết quả phân trang danh sách item trong 1 wishlist
 export class WishlistItemFilterDto {
   @ApiPropertyOptional({
     description: 'Tìm kiếm theo tên sản phẩm',
@@ -121,7 +127,7 @@ export class WishlistItemFilterDto {
     description: 'Trang hiện tại',
     example: 1,
     default: 1,
-    minimum: 1
+    minimum: 1,
   })
   @IsNumber()
   @IsOptional()
@@ -133,7 +139,7 @@ export class WishlistItemFilterDto {
     description: 'Số sản phẩm trên mỗi trang',
     example: 10,
     default: 10,
-    minimum: 1
+    minimum: 1,
   })
   @IsNumber()
   @IsOptional()
@@ -166,4 +172,4 @@ export class WishlistDetailResponseDto extends WishlistResponseDto {
     example: '2023-04-05T10:30:40.000Z',
   })
   timestamp: string;
-} 
+}

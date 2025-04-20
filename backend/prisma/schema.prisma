@@ -8,25 +8,24 @@ datasource db {
 }
 
 model User {
-  id                          String        @id @default(auto()) @map("_id") @db.ObjectId
+  id                          String     @id @default(auto()) @map("_id") @db.ObjectId
   name                        String
-  email                       String        @unique
+  email                       String     @unique
   password                    String
-  role                        UserRole      @default(CUSTOMER)
-  isActive                    Boolean       @default(true)
+  role                        UserRole   @default(CUSTOMER)
+  isActive                    Boolean    @default(true)
   addresses                   Address[]
-  isEmailVerified             Boolean       @default(false)
+  isEmailVerified             Boolean    @default(false)
   emailVerificationOTP        String?
   emailVerificationOTPExpires DateTime?
   passwordResetOTP            String?
   passwordResetOTPExpires     DateTime?
-  createdAt                   DateTime      @default(now())
-  updatedAt                   DateTime?     @updatedAt
+  createdAt                   DateTime   @default(now())
+  updatedAt                   DateTime?  @updatedAt
   cart                        Cart?
   orders                      Order[]
   wishlists                   Wishlist[]
   reviews                     Review[]
-  userVouchers                UserVoucher[]
 }
 
 enum UserRole {
@@ -68,6 +67,7 @@ model Product {
   slug          String
   description   String?
   basePrice     Float            @default(0)
+  quantity      Int              @default(0)
   categories    Category[]       @relation(fields: [categoryIds], references: [id])
   categoryIds   String[]         @db.ObjectId
   storeId       String?          @db.ObjectId
@@ -142,6 +142,8 @@ model Order {
   items                 OrderItem[]
   subtotal              Float
   total                 Float
+  discountAmount        Float?
+  voucherId             String?        @db.ObjectId
   shippingInfoId        String         @db.ObjectId
   shippingInfo          ShippingInfo   @relation(fields: [shippingInfoId], references: [id], onDelete: Cascade)
   paymentStatus         PaymentStatus  @default(PENDING)
@@ -292,19 +294,6 @@ model Voucher {
   conditions    Json?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime?         @updatedAt
-  userVouchers  UserVoucher[]
-}
-
-model UserVoucher {
-  id         String    @id @default(auto()) @map("_id") @db.ObjectId
-  userId     String    @db.ObjectId
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  voucherId  String    @db.ObjectId
-  voucher    Voucher   @relation(fields: [voucherId], references: [id], onDelete: Cascade)
-  isUsed     Boolean   @default(false)
-  usedAt     DateTime?
-  expiresAt  DateTime?
-  obtainedAt DateTime  @default(now())
 }
 
 enum DiscountType {

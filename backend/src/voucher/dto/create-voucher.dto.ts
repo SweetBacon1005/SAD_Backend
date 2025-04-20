@@ -1,18 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { DiscountType, VoucherApplicable } from '@prisma/client';
 import {
   IsBoolean,
   IsDateString,
   IsEnum,
   IsNotEmpty,
   IsNumber,
-  IsObject,
   IsOptional,
   IsPositive,
   IsString,
   Max,
   Min,
 } from 'class-validator';
-import { DiscountType, VoucherApplicable } from '@prisma/client';
 
 export class CreateVoucherDto {
   @ApiProperty({
@@ -80,14 +79,14 @@ export class CreateVoucherDto {
 
   @ApiProperty({
     description: 'Ngày bắt đầu hiệu lực',
-    example: '2023-06-01T00:00:00Z',
+    example: '2025-04-20T00:00:00Z',
   })
   @IsDateString()
   startDate: string;
 
   @ApiProperty({
     description: 'Ngày kết thúc hiệu lực',
-    example: '2023-08-31T23:59:59Z',
+    example: '2025-04-25T23:59:59Z',
   })
   @IsDateString()
   endDate: string;
@@ -113,25 +112,23 @@ export class CreateVoucherDto {
   usageLimit?: number;
 
   @ApiProperty({
-    description: 'Đối tượng áp dụng',
+    description: 'Đối tượng áp dụng voucher',
     enum: VoucherApplicable,
-    example: VoucherApplicable.ALL,
-    required: false,
     default: VoucherApplicable.ALL,
+    required: false,
   })
   @IsOptional()
   @IsEnum(VoucherApplicable)
   applicableFor?: VoucherApplicable;
 
   @ApiProperty({
-    description: 'Điều kiện áp dụng (category IDs, product IDs, user IDs...)',
+    description: 'Điều kiện áp dụng voucher',
     example: {
-      categoryIds: ['60d5ec9d2b5b82a5d5000001', '60d5ec9d2b5b82a5d5000002'],
-      productIds: ['60d5ec9d2b5b82a5d5000003'],
+      userIds: ['60d5ec9d2b5b82a5d5000001'],
+      firstOrder: true
     },
     required: false,
   })
   @IsOptional()
-  @IsObject()
   conditions?: Record<string, any>;
-} 
+}

@@ -9,16 +9,16 @@ import { config } from 'dotenv';
 import { AuthModule } from './auth/auth.module';
 import { AuthGuard } from './auth/guard/auth.guard';
 import { CartModule } from './cart/cart.module';
+import { CategoryModule } from './category/category.module';
 import { RolesGuard } from './common/guards/role.guard';
 import { PrismaModule } from './database/prisma.module';
-import { ProductModule } from './product/product.module';
 import { OrderModule } from './order/order.module';
-import { UserModule } from './user/user.module';
-import { ReviewModule } from './review/review.module';
-import { WishlistModule } from './wishlist/wishlist.module';
 import { PaymentModule } from './payment/payment.module';
-import { CategoryModule } from './category/category.module';
+import { ProductModule } from './product/product.module';
+import { ReviewModule } from './review/review.module';
+import { UserModule } from './user/user.module';
 import { VoucherModule } from './voucher/voucher.module';
+import { WishlistModule } from './wishlist/wishlist.module';
 config();
 
 @Module({
@@ -38,6 +38,8 @@ config();
     AuthModule,
     CacheModule.register({
       isGlobal: true,
+      ttl: 60000,
+      max: 3,
     }),
     ThrottlerModule.forRoot({
       throttlers: [

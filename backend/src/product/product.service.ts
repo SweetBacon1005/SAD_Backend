@@ -21,7 +21,6 @@ import { PriceComparisonResponseDto } from './dto/price-comparison.dto';
 export class ProductService {
   constructor(private prisma: PrismaService) {}
 
-  // Phương thức chuyển đổi Json thành Record<string, any> | null
   private mapProductToResponse(product: any): ProductResponseDto {
     return {
       ...product,
@@ -129,7 +128,6 @@ export class ProductService {
     };
   }
 
-  // Get product by ID
   async getProductById(id: string): Promise<ProductDetailResponseDto> {
     const product = await this.prisma.product.findUnique({
       where: { id },
@@ -150,7 +148,6 @@ export class ProductService {
     };
   }
 
-  // Get product by slug
   async getProductBySlug(slug: string): Promise<ProductDetailResponseDto> {
     const product = await this.prisma.product.findFirst({
       where: { slug },
@@ -171,7 +168,6 @@ export class ProductService {
     };
   }
 
-  // Update a product
   async updateProduct(
     id: string,
     data: UpdateProductDto,
@@ -190,7 +186,6 @@ export class ProductService {
           ...(data.metadata && {
             metadata: data.metadata as Prisma.JsonObject,
           }),
-          // Handle variants separately if needed
         },
         include: {
           variants: true,
@@ -204,7 +199,6 @@ export class ProductService {
     }
   }
 
-  // Delete a product
   async deleteProduct(id: string) {
     try {
       return await this.prisma.product.delete({
@@ -215,7 +209,6 @@ export class ProductService {
     }
   }
 
-  // Search products
   async searchProducts(
     payload: SearchProductDto,
   ): Promise<SearchProductResponseDto> {
@@ -252,18 +245,15 @@ export class ProductService {
     };
   }
 
-  // Phương thức so sánh sản phẩm
   async compareProducts(
     productIds: string[],
     currentPage: number = 1,
     pageSize: number = 10,
   ): Promise<ProductComparisonResponseDto> {
-    // Kiểm tra xem có đủ sản phẩm để so sánh không
     if (productIds.length < 2) {
       throw new BadRequestException('Cần ít nhất 2 sản phẩm để so sánh');
     }
 
-    // Lấy thông tin chi tiết của tất cả sản phẩm
     const products = await this.prisma.product.findMany({
       where: {
         id: {
@@ -277,9 +267,7 @@ export class ProductService {
       },
     });
 
-    // Kiểm tra xem tất cả sản phẩm có tồn tại không
     if (products.length !== productIds.length) {
-      // Tìm ID của sản phẩm không tồn tại
       const foundProductIds = products.map((p) => p.id);
       const missingProductIds = productIds.filter(
         (id) => !foundProductIds.includes(id),
@@ -290,9 +278,7 @@ export class ProductService {
       );
     }
 
-    // Tạo danh sách sản phẩm so sánh
     const comparisonProducts = products.map((product) => {
-      // Tính toán đánh giá trung bình
       const ratings = product.reviews.map((review) => review.rating);
       const averageRating = ratings.length
         ? ratings.reduce((a, b) => a + b, 0) / ratings.length
@@ -323,8 +309,6 @@ export class ProductService {
       };
     });
 
-    // Tạo danh sách các thuộc tính so sánh
-    // Bắt đầu với các thuộc tính cơ bản
     const features = [
       {
         name: 'Giá',
@@ -338,7 +322,6 @@ export class ProductService {
       },
     ];
 
-    // Thu thập các thuộc tính từ metadata của sản phẩm
     const allMetadataKeys = new Set<string>();
     products.forEach((product) => {
       if (product.metadata) {
@@ -347,7 +330,6 @@ export class ProductService {
       }
     });
 
-    // Thêm các thuộc tính từ metadata vào danh sách so sánh
     allMetadataKeys.forEach((key) => {
       features.push({
         name: key,
@@ -366,10 +348,8 @@ export class ProductService {
       });
     });
 
-    // Xác định sản phẩm tốt nhất dựa trên tiêu chí
     const recommendations: Record<string, string> = {};
 
-    // Sản phẩm có giá trị tốt nhất (dựa trên đánh giá và giá)
     const valueScores = comparisonProducts.map((p, index) => ({
       id: p.id,
       score: p.averageRating / products[index].basePrice,
@@ -382,10 +362,9 @@ export class ProductService {
 
     recommendations.bestValue = bestValue.id;
 
-    // Sản phẩm có chất lượng tốt nhất (dựa trên đánh giá)
     const qualityScores = comparisonProducts.map((p) => ({
       id: p.id,
-      score: p.averageRating * (p.reviewCount > 0 ? 1 : 0.5), // Ưu tiên sản phẩm có nhiều đánh giá
+      score: p.averageRating * (p.reviewCount > 0 ? 1 : 0.5),
     }));
 
     const bestQuality = qualityScores.reduce(
@@ -395,7 +374,6 @@ export class ProductService {
 
     recommendations.bestQuality = bestQuality.id;
 
-    // Tính toán phân trang
     const total = comparisonProducts.length;
     const totalPages = Math.ceil(total / pageSize);
     const skip = (currentPage - 1) * pageSize;
@@ -411,7 +389,6 @@ export class ProductService {
     };
   }
 
-  // So sánh giá sản phẩm ở các cửa hàng khác nhau
   async compareProductPrices(
     productName: string,
     category?: string,
@@ -419,7 +396,6 @@ export class ProductService {
     currentPage: number = 1,
     pageSize: number = 10,
   ): Promise<PriceComparisonResponseDto> {
-    // Các điều kiện tìm kiếm
     const where: Prisma.ProductWhereInput = {
       name: {
         contains: productName,
@@ -439,7 +415,6 @@ export class ProductService {
         : {}),
     };
 
-    // Lấy tất cả sản phẩm phù hợp với điều kiện tìm kiếm
     const products = await this.prisma.product.findMany({
       where,
       include: {
@@ -448,7 +423,6 @@ export class ProductService {
       },
     });
 
-    // Giá trị mặc định cho lowestPrice
     const defaultLowestPrice = {
       price: 0,
       storeId: '',
@@ -467,21 +441,17 @@ export class ProductService {
       };
     }
 
-    // Lọc sản phẩm theo trạng thái tồn kho nếu có yêu cầu
     const filteredProducts = inStock
       ? products.filter((product) =>
           product.variants.some((variant) => variant.quantity > 0),
         )
       : products;
     
-    // Tạo danh sách kết quả
     const allResults = filteredProducts.map((product) => {
-      // Tính giá thấp nhất từ các biến thể (nếu có)
       const lowestVariantPrice = product.variants.length
         ? Math.min(...product.variants.map((v) => v.price))
         : product.basePrice;
 
-      // Kiểm tra tình trạng tồn kho
       const productInStock = product.variants.some((v) => v.quantity > 0);
 
       const transformedVariants = product.variants.map(variant => ({
@@ -513,16 +483,13 @@ export class ProductService {
       };
     });
 
-    // Sắp xếp kết quả theo giá từ thấp đến cao
     allResults.sort((a, b) => a.price - b.price);
 
-    // Tính toán phân trang
     const total = allResults.length;
     const totalPages = Math.ceil(total / pageSize);
     const skip = (currentPage - 1) * pageSize;
     const results = allResults.slice(skip, skip + pageSize);
 
-    // Xác định giá thấp nhất
     const lowestPrice = allResults.length
       ? {
           price: allResults[0].price,

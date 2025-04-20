@@ -110,6 +110,14 @@ export class CreateOrderDto {
   paymentMethod: PaymentMethod;
 
   @ApiPropertyOptional({
+    description: 'ID của voucher được áp dụng',
+    example: '6151f3d2e149e32b3404c8d5',
+  })
+  @IsString()
+  @IsOptional()
+  voucherId?: string;
+
+  @ApiPropertyOptional({
     description: 'Ghi chú cho đơn hàng',
     example: 'Giao hàng ngoài giờ hành chính',
   })

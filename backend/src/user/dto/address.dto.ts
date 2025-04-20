@@ -1,4 +1,3 @@
-// src/user/dto/address.dto.ts
 import { IsString, IsOptional, IsBoolean, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 

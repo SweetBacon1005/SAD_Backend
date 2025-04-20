@@ -1,28 +1,30 @@
-// src/user/user.service.ts
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma, User, UserRole } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../database/prisma.service';
-import { User, UserRole, Prisma } from '@prisma/client';
-import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import { AddressDto } from './dto/address.dto';
 import { SearchUserDto } from './dto/search-user.dto';
-import * as bcrypt from 'bcrypt';
+import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 
-// Định nghĩa type an toàn cho user
-type UserWithoutPassword = Omit<User, 'password' | 
-  'emailVerificationOTP' | 
-  'emailVerificationOTPExpires' | 
-  'passwordResetOTP' | 
-  'passwordResetOTPExpires'
+type UserWithoutPassword = Omit<
+  User,
+  | 'password'
+  | 'emailVerificationOTP'
+  | 'emailVerificationOTPExpires'
+  | 'passwordResetOTP'
+  | 'passwordResetOTPExpires'
 >;
 
 @Injectable()
 export class UserService {
   constructor(private prisma: PrismaService) {}
 
-  // User Management
   async createUser(data: CreateUserDto): Promise<UserWithoutPassword> {
     try {
-      // Check if user with email already exists
       const existingUser = await this.prisma.user.findUnique({
         where: { email: data.email },
       });
@@ -31,10 +33,8 @@ export class UserService {
         throw new ConflictException('Email already in use');
       }
 
-      // Hash the password
       const hashedPassword = await bcrypt.hash(data.password, 10);
 
-      // Create the user
       const user = await this.prisma.user.create({
         data: {
           ...data,
@@ -42,9 +42,14 @@ export class UserService {
         },
       });
 
-      // Return user without password
-      const { password, emailVerificationOTP, emailVerificationOTPExpires, 
-        passwordResetOTP, passwordResetOTPExpires, ...userWithoutPassword } = user;
+      const {
+        password,
+        emailVerificationOTP,
+        emailVerificationOTPExpires,
+        passwordResetOTP,
+        passwordResetOTPExpires,
+        ...userWithoutPassword
+      } = user;
       return userWithoutPassword;
     } catch (error) {
       if (error instanceof ConflictException) {
@@ -54,27 +59,28 @@ export class UserService {
     }
   }
 
-  async searchUsers(searchUserDto: SearchUserDto) {
-    const { currentPage = 1, pageSize = 10, query, role, isActive } = searchUserDto;
+  async searchUsers(payload: SearchUserDto) {
+    const currentPage = Number(payload.currentPage);
+    const pageSize = Number(payload.pageSize);
     const skip = (currentPage - 1) * pageSize;
-    
+
     const where: Prisma.UserWhereInput = {};
-    
-    if (role) {
-      where.role = role;
+
+    if (payload.role) {
+      where.role = payload.role;
     }
-    
-    if (isActive !== undefined) {
-      where.isActive = isActive;
+
+    if (payload.isActive !== undefined) {
+      where.isActive = payload.isActive;
     }
-    
-    if (query) {
+
+    if (payload.query) {
       where.OR = [
-        { name: { contains: query, mode: 'insensitive' } },
-        { email: { contains: query, mode: 'insensitive' } },
+        { name: { contains: payload.query, mode: 'insensitive' } },
+        { email: { contains: payload.query, mode: 'insensitive' } },
       ];
     }
-    
+
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
         skip,
@@ -91,17 +97,11 @@ export class UserService {
           createdAt: true,
           updatedAt: true,
           addresses: true,
-          // Exclude sensitive fields
-          password: false,
-          emailVerificationOTP: false,
-          emailVerificationOTPExpires: false,
-          passwordResetOTP: false,
-          passwordResetOTPExpires: false,
         },
       }),
       this.prisma.user.count({ where }),
     ]);
-    
+
     return {
       data: users,
       pagination: {
@@ -138,7 +138,7 @@ export class UserService {
         addresses: true,
       },
     });
-    
+
     return users as unknown as UserWithoutPassword[];
   }
 
@@ -155,12 +155,6 @@ export class UserService {
         createdAt: true,
         updatedAt: true,
         addresses: true,
-        // Exclude sensitive fields
-        password: false,
-        emailVerificationOTP: false,
-        emailVerificationOTPExpires: false,
-        passwordResetOTP: false,
-        passwordResetOTPExpires: false,
       },
     });
 
@@ -180,9 +174,11 @@ export class UserService {
     });
   }
 
-  async updateUser(id: string, data: UpdateUserDto): Promise<UserWithoutPassword> {
+  async updateUser(
+    id: string,
+    data: UpdateUserDto,
+  ): Promise<UserWithoutPassword> {
     try {
-      // If email is being changed, check if it's already in use
       if (data.email) {
         const existingUser = await this.prisma.user.findUnique({
           where: { email: data.email },
@@ -193,7 +189,6 @@ export class UserService {
         }
       }
 
-      // If password is being updated, hash it
       if (data.password) {
         data.password = await bcrypt.hash(data.password, 10);
       }
@@ -203,9 +198,14 @@ export class UserService {
         data,
       });
 
-      // Return user without password
-      const { password, emailVerificationOTP, emailVerificationOTPExpires, 
-        passwordResetOTP, passwordResetOTPExpires, ...userWithoutPassword } = user;
+      const {
+        password,
+        emailVerificationOTP,
+        emailVerificationOTPExpires,
+        passwordResetOTP,
+        passwordResetOTPExpires,
+        ...userWithoutPassword
+      } = user;
       return userWithoutPassword;
     } catch (error) {
       if (error instanceof ConflictException) {
@@ -231,16 +231,24 @@ export class UserService {
     }
   }
 
-  async changeUserRole(id: string, role: UserRole): Promise<UserWithoutPassword> {
+  async changeUserRole(
+    id: string,
+    role: UserRole,
+  ): Promise<UserWithoutPassword> {
     try {
       const user = await this.prisma.user.update({
         where: { id },
         data: { role },
       });
 
-      // Return user without password
-      const { password, emailVerificationOTP, emailVerificationOTPExpires, 
-        passwordResetOTP, passwordResetOTPExpires, ...userWithoutPassword } = user;
+      const {
+        password,
+        emailVerificationOTP,
+        emailVerificationOTPExpires,
+        passwordResetOTP,
+        passwordResetOTPExpires,
+        ...userWithoutPassword
+      } = user;
       return userWithoutPassword;
     } catch (error) {
       if (error.code === 'P2025') {
@@ -266,9 +274,14 @@ export class UserService {
         data: { isActive: !user.isActive },
       });
 
-      // Return user without password
-      const { password, emailVerificationOTP, emailVerificationOTPExpires, 
-        passwordResetOTP, passwordResetOTPExpires, ...userWithoutPassword } = updatedUser;
+      const {
+        password,
+        emailVerificationOTP,
+        emailVerificationOTPExpires,
+        passwordResetOTP,
+        passwordResetOTPExpires,
+        ...userWithoutPassword
+      } = updatedUser;
       return userWithoutPassword;
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -278,18 +291,15 @@ export class UserService {
     }
   }
 
-  // Address Management
   async addAddress(userId: string, addressData: AddressDto): Promise<any> {
     try {
-      // Check if this is the first address for the user
       const userAddresses = await this.prisma.address.findMany({
         where: { userId },
       });
 
-      // If it's the first address, make it default
-      const isDefault = userAddresses.length === 0 ? true : addressData.isDefault ?? false;
+      const isDefault =
+        userAddresses.length === 0 ? true : (addressData.isDefault ?? false);
 
-      // If setting this address as default, unset default for other addresses
       if (isDefault && userAddresses.length > 0) {
         await this.prisma.address.updateMany({
           where: { userId },
@@ -314,9 +324,12 @@ export class UserService {
     }
   }
 
-  async updateAddress(userId: string, addressId: string, addressData: AddressDto): Promise<any> {
+  async updateAddress(
+    userId: string,
+    addressId: string,
+    addressData: AddressDto,
+  ): Promise<any> {
     try {
-      // Get address and check ownership
       const address = await this.prisma.address.findUnique({
         where: { id: addressId },
       });
@@ -329,7 +342,6 @@ export class UserService {
         throw new Error('Address does not belong to this user');
       }
 
-      // If setting this address as default, unset default for other addresses
       if (addressData.isDefault) {
         await this.prisma.address.updateMany({
           where: { userId, NOT: { id: addressId } },
@@ -353,7 +365,6 @@ export class UserService {
 
   async deleteAddress(userId: string, addressId: string): Promise<void> {
     try {
-      // Get address and check ownership
       const address = await this.prisma.address.findUnique({
         where: { id: addressId },
       });
@@ -370,7 +381,6 @@ export class UserService {
         where: { id: addressId },
       });
 
-      // If deleted address was default and user has other addresses, set a new default
       if (address.isDefault) {
         const anotherAddress = await this.prisma.address.findFirst({
           where: { userId },
@@ -411,7 +421,9 @@ export class UserService {
       });
 
       if (!address) {
-        throw new NotFoundException(`No default address found for user with ID ${userId}`);
+        throw new NotFoundException(
+          `No default address found for user with ID ${userId}`,
+        );
       }
 
       return address;
@@ -425,7 +437,6 @@ export class UserService {
 
   async setDefaultAddress(userId: string, addressId: string): Promise<any> {
     try {
-      // Get address and check ownership
       const address = await this.prisma.address.findUnique({
         where: { id: addressId },
       });

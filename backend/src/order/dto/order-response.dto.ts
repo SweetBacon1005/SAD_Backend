@@ -126,7 +126,19 @@ export class OrderResponseDto {
   @ApiProperty({ description: 'Tổng giá trị sản phẩm', example: 300000 })
   subtotal: number;
 
-  @ApiProperty({ description: 'Tổng giá trị đơn hàng', example: 300000 })
+  @ApiPropertyOptional({ 
+    description: 'Số tiền giảm giá từ voucher', 
+    example: 30000 
+  })
+  discountAmount?: number;
+
+  @ApiPropertyOptional({ 
+    description: 'ID của voucher đã áp dụng', 
+    example: '6151f3d2e149e32b3404c8d5' 
+  })
+  voucherId?: string;
+
+  @ApiProperty({ description: 'Tổng giá trị đơn hàng', example: 270000 })
   total: number;
 
   @ApiProperty({ description: 'ID thông tin giao hàng', example: '6151f3d2e149e32b3404c8c5' })

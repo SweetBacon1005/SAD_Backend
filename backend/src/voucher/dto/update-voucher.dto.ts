@@ -120,9 +120,8 @@ export class UpdateVoucherDto {
   usageLimit?: number;
 
   @ApiProperty({
-    description: 'Đối tượng áp dụng',
+    description: 'Đối tượng áp dụng voucher',
     enum: VoucherApplicable,
-    example: VoucherApplicable.ALL,
     required: false,
   })
   @IsOptional()
