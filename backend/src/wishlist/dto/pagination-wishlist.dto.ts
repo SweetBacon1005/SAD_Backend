@@ -11,9 +11,9 @@ import {
 import { WishlistResponseDto } from './wishlist-response.dto';
 
 export enum WishlistSortField {
+  NAME = 'name',
   CREATED_AT = 'createdAt',
   UPDATED_AT = 'updatedAt',
-  NAME = 'name',
 }
 
 export enum SortOrder {
@@ -22,14 +22,6 @@ export enum SortOrder {
 }
 
 export class WishlistFilterDto {
-  @ApiPropertyOptional({
-    description: 'Tìm kiếm theo tên danh sách yêu thích',
-    example: 'Quần áo',
-  })
-  @IsOptional()
-  @IsString()
-  search?: string;
-
   @ApiPropertyOptional({
     description: 'Trường để sắp xếp',
     enum: WishlistSortField,
@@ -47,15 +39,6 @@ export class WishlistFilterDto {
   @IsOptional()
   @IsEnum(SortOrder)
   sortOrder?: SortOrder = SortOrder.DESC;
-
-  @ApiPropertyOptional({
-    description: 'Chỉ lấy danh sách công khai',
-    example: true,
-  })
-  @IsOptional()
-  @IsBoolean()
-  @Type(() => Boolean)
-  isPublic?: boolean;
 
   @ApiPropertyOptional({
     description: 'Trang hiện tại',

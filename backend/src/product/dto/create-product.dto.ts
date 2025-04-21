@@ -41,13 +41,12 @@ export class CreateProductDto {
   basePrice: number;
 
   @ApiProperty({
-    description: 'Danh sách ID các danh mục sản phẩm thuộc về',
-    type: [String],
-    example: ['6151f3d2e149e32b3404c8d1', '6151f3d2e149e32b3404c8d2']
+    description: 'ID danh mục sản phẩm',
+    example: '6151f3d2e149e32b3404c8d1'
   })
-  @IsArray()
-  @IsString({ each: true })
-  categoryIds: string[];
+  @IsString()
+  @IsOptional()
+  categoryId?: string;
 
   @ApiPropertyOptional({
     description: 'ID cửa hàng bán sản phẩm',
@@ -123,14 +122,12 @@ export class UpdateProductDto {
   basePrice?: number;
 
   @ApiPropertyOptional({
-    description: 'Danh sách ID danh mục cần cập nhật',
-    type: [String],
-    example: ['6151f3d2e149e32b3404c8d1', '6151f3d2e149e32b3404c8d3']
+    description: 'ID danh mục cần cập nhật',
+    example: '6151f3d2e149e32b3404c8d1'
   })
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  categoryIds?: string[];
+  @IsString()
+  categoryId?: string;
 
   @ApiPropertyOptional({
     description: 'ID cửa hàng cần cập nhật',

@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export class GetAllProductsDto {
+export class GetProductsDto {
   @ApiPropertyOptional({
     description: 'Trang hiện tại',
     example: 1,
@@ -28,12 +28,12 @@ export class GetAllProductsDto {
   pageSize?: number;
 
   @ApiPropertyOptional({
-    description: 'Danh sách ID danh mục cần lọc (dạng chuỗi ngăn cách bởi dấu phẩy)',
-    example: '6151f3d2e149e32b3404c8d1,6151f3d2e149e32b3404c8d2'
+    description: 'ID danh mục cần lọc',
+    example: '6151f3d2e149e32b3404c8d1'
   })
   @IsString()
   @IsOptional()
-  categoryIds?: string;
+  categoryId?: string;
 
   @ApiPropertyOptional({
     description: 'Giá tối thiểu (VND)',

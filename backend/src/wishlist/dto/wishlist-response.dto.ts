@@ -40,15 +40,6 @@ export class WishlistResponseDto {
   @ApiProperty({ description: 'ID danh sách yêu thích', example: '6151f3d2e149e32b3404c8b5' })
   id: string;
 
-  @ApiProperty({ description: 'Tên danh sách yêu thích', example: 'Danh sách quần áo yêu thích' })
-  name: string;
-
-  @ApiPropertyOptional({ description: 'Mô tả danh sách yêu thích', example: 'Những sản phẩm quần áo mà tôi yêu thích' })
-  description?: string;
-
-  @ApiProperty({ description: 'Trạng thái công khai của danh sách', example: false })
-  isPublic: boolean;
-
   @ApiProperty({ description: 'Thông tin người dùng sở hữu', type: UserDto })
   user: UserDto;
 

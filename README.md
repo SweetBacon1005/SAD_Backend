@@ -91,9 +91,10 @@ http://localhost:3000/api-docs
 - **Xóa đánh giá**: `DELETE /reviews/:id` - Xóa đánh giá
 
 ### Wishlist
-- **Danh sách yêu thích**: `GET /wishlist` - Xem danh sách sản phẩm yêu thích
-- **Thêm vào yêu thích**: `POST /wishlist` - Thêm sản phẩm vào danh sách yêu thích
-- **Xóa khỏi yêu thích**: `DELETE /wishlist/:productId` - Xóa sản phẩm khỏi danh sách yêu thích
+- **Xem wishlist**: `GET /wishlist` - Lấy hoặc tạo mới wishlist của người dùng hiện tại
+- **Thêm sản phẩm**: `POST /wishlist/add-item` - Thêm sản phẩm vào wishlist
+- **Xóa sản phẩm**: `DELETE /wishlist/items/:productId` - Xóa sản phẩm khỏi wishlist
+- **Xóa tất cả sản phẩm**: `DELETE /wishlist/items` - Xóa tất cả sản phẩm trong wishlist
 
 ### Voucher
 - **Danh sách voucher**: `GET /vouchers` - Xem tất cả voucher

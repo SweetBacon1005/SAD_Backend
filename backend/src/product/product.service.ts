@@ -6,16 +6,16 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { CreateProductDto, UpdateProductDto } from './dto/create-product.dto';
-import { GetAllProductsResponseDto } from './dto/get-all-products-response.dto';
-import { GetAllProductsDto } from './dto/get-products.dto';
+import { GetProductsResponseDto as GetProductsResponseDto } from './dto/get-products-response.dto';
+import { GetProductsDto as GetProductsDto } from './dto/get-products.dto';
+import { PriceComparisonResponseDto } from './dto/price-comparison.dto';
+import { ProductComparisonResponseDto } from './dto/product-comparison-response.dto';
 import {
   ProductDetailResponseDto,
   ProductResponseDto,
 } from './dto/product-response.dto';
 import { SearchProductResponseDto } from './dto/search-product-response.dto';
 import { SearchProductDto } from './dto/search-product.dto';
-import { ProductComparisonResponseDto } from './dto/product-comparison-response.dto';
-import { PriceComparisonResponseDto } from './dto/price-comparison.dto';
 
 @Injectable()
 export class ProductService {
@@ -51,9 +51,7 @@ export class ProductService {
           storeId: data.storeId ?? null,
           images: data.images ?? [],
           metadata: data.metadata ? (data.metadata as Prisma.JsonObject) : {},
-          categories: {
-            connect: data.categoryIds.map((id) => ({ id })),
-          },
+          categoryId: data.categoryId || null,
           variants: data.variants?.length
             ? {
                 create: data.variants.map((variant) => ({
@@ -72,7 +70,7 @@ export class ProductService {
         },
         include: {
           variants: true,
-          categories: true,
+          category: true,
         },
       });
 
@@ -83,23 +81,20 @@ export class ProductService {
     }
   }
 
-  async getAllProducts(
-    payload: GetAllProductsDto,
-  ): Promise<GetAllProductsResponseDto> {
-    const currentPage = payload.currentPage ?? 1;
-    const pageSize = payload.pageSize ?? 10;
+  async getAllProducts() {
+    const products = await this.prisma.product.findMany();
+    return this.mapProductsToResponse(products);
+  }
+
+  async getProducts(
+    payload: GetProductsDto,
+  ): Promise<GetProductsResponseDto> {
+    const currentPage = Number(payload.currentPage) || 1;
+    const pageSize = Number(payload.pageSize) || 10;
     const skip = (currentPage - 1) * pageSize;
 
     const where: Prisma.ProductWhereInput = {
-      categories: payload.categoryIds
-        ? {
-            some: {
-              id: {
-                in: payload.categoryIds.split(',').map((id) => id.trim()),
-              },
-            },
-          }
-        : undefined,
+      categoryId: payload.categoryId || undefined,
       basePrice: {
         ...(payload.minPrice ? { gte: payload.minPrice } : {}),
         ...(payload.maxPrice ? { lte: payload.maxPrice } : {}),
@@ -114,7 +109,7 @@ export class ProductService {
         take: pageSize,
         include: {
           variants: true,
-          categories: true,
+          category: true,
         },
         orderBy: { createdAt: 'desc' },
       }),
@@ -133,7 +128,7 @@ export class ProductService {
       where: { id },
       include: {
         variants: true,
-        categories: true,
+        category: true,
         reviews: true,
       },
     });
@@ -153,7 +148,7 @@ export class ProductService {
       where: { slug },
       include: {
         variants: true,
-        categories: true,
+        category: true,
         reviews: true,
       },
     });
@@ -180,7 +175,7 @@ export class ProductService {
           ...(data.slug && { slug: data.slug }),
           ...(data.description && { description: data.description }),
           ...(data.basePrice !== undefined && { basePrice: data.basePrice }),
-          ...(data.categoryIds && { categoryIds: data.categoryIds }),
+          ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
           ...(data.storeId && { storeId: data.storeId }),
           ...(data.images && { images: data.images }),
           ...(data.metadata && {
@@ -189,7 +184,7 @@ export class ProductService {
         },
         include: {
           variants: true,
-          categories: true,
+          category: true,
         },
       });
 
@@ -231,7 +226,7 @@ export class ProductService {
         take: pageSize,
         include: {
           variants: true,
-          categories: true,
+          category: true,
         },
         orderBy: { createdAt: 'desc' },
       }),
@@ -263,7 +258,7 @@ export class ProductService {
       include: {
         variants: true,
         reviews: true,
-        categories: true,
+        category: true,
       },
     });
 
@@ -316,9 +311,7 @@ export class ProductService {
       },
       {
         name: 'Danh mục',
-        values: products.map(
-          (p) => p.categories.map((c) => c.name).join(', ') || 'Không có',
-        ),
+        values: products.map((p) => p.category?.name || 'Không có'),
       },
     ];
 
@@ -403,12 +396,13 @@ export class ProductService {
       },
       ...(category
         ? {
-            categories: {
-              some: {
-                name: {
-                  contains: category,
-                  mode: 'insensitive',
-                },
+            categoryId: {
+              not: null,
+            },
+            category: {
+              name: {
+                contains: category,
+                mode: 'insensitive',
               },
             },
           }
@@ -420,6 +414,7 @@ export class ProductService {
       include: {
         variants: true,
         store: true,
+        category: true,
       },
     });
 
@@ -446,7 +441,7 @@ export class ProductService {
           product.variants.some((variant) => variant.quantity > 0),
         )
       : products;
-    
+
     const allResults = filteredProducts.map((product) => {
       const lowestVariantPrice = product.variants.length
         ? Math.min(...product.variants.map((v) => v.price))
@@ -454,16 +449,16 @@ export class ProductService {
 
       const productInStock = product.variants.some((v) => v.quantity > 0);
 
-      const transformedVariants = product.variants.map(variant => ({
+      const transformedVariants = product.variants.map((variant) => ({
         id: variant.id,
         name: variant.name,
         price: variant.price,
         quantity: variant.quantity,
         description: variant.description,
-        attributes: variant.attributes 
+        attributes: variant.attributes
           ? JSON.parse(JSON.stringify(variant.attributes))
           : null,
-        images: variant.images
+        images: variant.images,
       }));
 
       return {
@@ -476,10 +471,16 @@ export class ProductService {
         imageUrl: product.images.length ? product.images[0] : '',
         productUrl: `/products/${product.slug}`,
         inStock: productInStock,
+        category: product.category
+          ? {
+              id: product.category.id,
+              name: product.category.name,
+            }
+          : undefined,
         promotion: product.metadata
           ? JSON.parse(JSON.stringify(product.metadata)).promotion || null
           : null,
-        variants: transformedVariants
+        variants: transformedVariants,
       };
     });
 

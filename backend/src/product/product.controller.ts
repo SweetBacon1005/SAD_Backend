@@ -23,8 +23,8 @@ import {
 import { UserRole } from '@prisma/client';
 import { Roles } from '../common/decorators/role.decorator';
 import { CreateProductDto, UpdateProductDto } from './dto/create-product.dto';
-import { GetAllProductsResponseDto } from './dto/get-all-products-response.dto';
-import { GetAllProductsDto } from './dto/get-products.dto';
+import { GetProductsResponseDto } from './dto/get-products-response.dto';
+import { GetProductsDto } from './dto/get-products.dto';
 import {
   PriceComparisonRequestDto,
   PriceComparisonResponseDto,
@@ -45,17 +45,28 @@ import { ProductService } from './product.service';
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
-  @Post('all')
+  @Post('get-products')
   @Public()
   @ApiOperation({ summary: 'Lấy danh sách sản phẩm có phân trang và lọc' })
   @ApiOkResponse({
     description: 'Danh sách sản phẩm và thông tin phân trang',
-    type: GetAllProductsResponseDto,
+    type: GetProductsResponseDto,
   })
-  async getAllProducts(
-    @Body() payload: GetAllProductsDto,
-  ): Promise<GetAllProductsResponseDto> {
-    return this.productService.getAllProducts(payload);
+  async getProducts(
+    @Body() payload: GetProductsDto,
+  ): Promise<GetProductsResponseDto> {
+    return this.productService.getProducts(payload);
+  }
+
+  @Get('all')
+  @Public()
+  @ApiOperation({ summary: 'Lấy tất cả sản phẩm' })
+  @ApiOkResponse({
+    description: 'Danh sách tất cả sản phẩm',
+    type: GetProductsResponseDto,
+  })
+  async getAllProducts() {
+    return this.productService.getAllProducts();
   }
 
   @Post('search')

@@ -16,7 +16,7 @@ export class CategoryService {
   async create(
     createCategoryDto: CreateCategoryDto,
   ): Promise<CategoryResponseDto> {
-    const { name, description, parentId } = createCategoryDto;
+    const { name, description } = createCategoryDto;
 
     const slug = slugify(name, { lower: true, strict: true });
 
@@ -30,40 +30,20 @@ export class CategoryService {
       );
     }
 
-    if (parentId) {
-      const parentCategory = await this.prisma.category.findUnique({
-        where: { id: parentId },
-      });
-
-      if (!parentCategory) {
-        throw new BadRequestException('Parent category not found');
-      }
-    }
-
     const category = await this.prisma.category.create({
       data: {
         name,
         slug,
         description,
-        parentId,
       },
     });
 
     return this.mapToCategoryDto(category);
   }
 
-  async findAll(parentId?: string): Promise<CategoryResponseDto[]> {
-    let where = {};
-
-    if (parentId) {
-      where = { parentId };
-    }
-
+  async findAll(): Promise<CategoryResponseDto[]> {
     const categories = await this.prisma.category.findMany({
-      where,
       include: {
-        parent: true,
-        children: true,
         products: true,
       },
     });
@@ -75,8 +55,6 @@ export class CategoryService {
     const category = await this.prisma.category.findUnique({
       where: { id },
       include: {
-        parent: true,
-        children: true,
         products: true,
       },
     });
@@ -92,8 +70,6 @@ export class CategoryService {
     const category = await this.prisma.category.findUnique({
       where: { slug },
       include: {
-        parent: true,
-        children: true,
         products: true,
       },
     });
@@ -109,7 +85,7 @@ export class CategoryService {
     id: string,
     updateCategoryDto: UpdateCategoryDto,
   ): Promise<CategoryResponseDto> {
-    const { name, description, parentId } = updateCategoryDto;
+    const { name, description } = updateCategoryDto;
 
     const existingCategory = await this.prisma.category.findUnique({
       where: { id },
@@ -138,36 +114,14 @@ export class CategoryService {
       }
     }
 
-    if (parentId && parentId !== existingCategory.parentId) {
-      if (parentId === id) {
-        throw new BadRequestException('Category cannot be its own parent');
-      }
-
-      const parentCategory = await this.prisma.category.findUnique({
-        where: { id: parentId },
-      });
-
-      if (!parentCategory) {
-        throw new BadRequestException('Parent category not found');
-      }
-
-      const isChild = await this.isChildCategory(id, parentId);
-      if (isChild) {
-        throw new BadRequestException('Cannot set a child category as parent');
-      }
-    }
-
     const updatedCategory = await this.prisma.category.update({
       where: { id },
       data: {
         name: name || existingCategory.name,
         slug,
         description,
-        parentId,
       },
       include: {
-        parent: true,
-        children: true,
         products: true,
       },
     });
@@ -179,7 +133,7 @@ export class CategoryService {
     const existingCategory = await this.prisma.category.findUnique({
       where: { id },
       include: {
-        children: true,
+        products: true,
       },
     });
 
@@ -187,8 +141,8 @@ export class CategoryService {
       throw new NotFoundException(`Category with ID ${id} not found`);
     }
 
-    if (existingCategory.children && existingCategory.children.length > 0) {
-      throw new BadRequestException('Cannot delete category with children');
+    if (existingCategory.products && existingCategory.products.length > 0) {
+      throw new BadRequestException('Cannot delete category with products');
     }
 
     await this.prisma.category.delete({
@@ -198,27 +152,6 @@ export class CategoryService {
     return { success: true, message: 'Category deleted successfully' };
   }
 
-  async findChildren(id: string): Promise<CategoryResponseDto[]> {
-    const existingCategory = await this.prisma.category.findUnique({
-      where: { id },
-    });
-
-    if (!existingCategory) {
-      throw new NotFoundException(`Category with ID ${id} not found`);
-    }
-
-    const children = await this.prisma.category.findMany({
-      where: {
-        parentId: id,
-      },
-      include: {
-        products: true,
-      },
-    });
-
-    return children.map((child) => this.mapToCategoryDto(child));
-  }
-
   async findProducts(id: string): Promise<any[]> {
     const existingCategory = await this.prisma.category.findUnique({
       where: { id },
@@ -226,7 +159,6 @@ export class CategoryService {
         products: {
           include: {
             variants: true,
-            categories: true,
           },
         },
       },
@@ -239,55 +171,13 @@ export class CategoryService {
     return existingCategory.products;
   }
 
-  private async isChildCategory(
-    parentId: string,
-    childId: string,
-  ): Promise<boolean> {
-    const childCategory = await this.prisma.category.findUnique({
-      where: { id: childId },
-      include: { children: true },
-    });
-
-    if (!childCategory) {
-      return false;
-    }
-
-    if (childCategory.children.some((child) => child.id === parentId)) {
-      return true;
-    }
-
-    for (const child of childCategory.children) {
-      const isChild = await this.isChildCategory(parentId, child.id);
-      if (isChild) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
   private mapToCategoryDto(category: any): CategoryResponseDto {
     return {
       id: category.id,
       name: category.name,
       slug: category.slug,
       description: category.description,
-      parentId: category.parentId,
-      parent: category.parent
-        ? {
-            id: category.parent.id,
-            name: category.parent.name,
-            slug: category.parent.slug,
-          }
-        : null,
-      children: category.children
-        ? category.children.map((child) => ({
-            id: child.id,
-            name: child.name,
-            slug: child.slug,
-          }))
-        : [],
-      productCount: category.products ? category.products.length : 0,
+      productCount: category.products?.length || 0,
       createdAt: category.createdAt,
       updatedAt: category.updatedAt,
     };
