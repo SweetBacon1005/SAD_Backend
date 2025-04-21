@@ -8,13 +8,11 @@ import {
   Param,
   Post,
   Put,
-  Query,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
-  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -47,20 +45,13 @@ export class CategoryController {
   @Get()
   @Public()
   @ApiOperation({ summary: 'Lấy tất cả danh mục' })
-  @ApiQuery({
-    name: 'parentId',
-    required: false,
-    description: 'Lọc theo danh mục cha',
-  })
   @ApiResponse({
     status: 200,
     description: 'Trả về tất cả danh mục',
     type: [CategoryResponseDto],
   })
-  async getAllCategories(
-    @Query('parentId') parentId?: string,
-  ): Promise<CategoryResponseDto[]> {
-    return this.categoryService.findAll(parentId);
+  async getAllCategories(): Promise<CategoryResponseDto[]> {
+    return this.categoryService.findAll();
   }
 
   @Get(':id')
@@ -92,6 +83,7 @@ export class CategoryController {
   }
 
   @Put(':id')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Cập nhật danh mục' })
   @ApiParam({ name: 'id', description: 'ID danh mục' })
   @ApiResponse({
@@ -117,22 +109,8 @@ export class CategoryController {
     return this.categoryService.remove(id);
   }
 
-  @Get(':id/children')
-  @Public()
-  @ApiOperation({ summary: 'Lấy tất cả danh mục con' })
-  @ApiParam({ name: 'id', description: 'ID danh mục cha' })
-  @ApiResponse({
-    status: 200,
-    description: 'Trả về tất cả danh mục con',
-    type: [CategoryResponseDto],
-  })
-  async getChildCategories(
-    @Param('id') id: string,
-  ): Promise<CategoryResponseDto[]> {
-    return this.categoryService.findChildren(id);
-  }
-
   @Get(':id/products')
+  @Public()
   @ApiOperation({ summary: 'Lấy tất cả sản phẩm trong danh mục' })
   @ApiParam({ name: 'id', description: 'ID danh mục' })
   @ApiResponse({

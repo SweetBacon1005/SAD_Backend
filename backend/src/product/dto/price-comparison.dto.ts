@@ -105,6 +105,19 @@ export class StoreProductPriceDto {
   productUrl: string;
 
   @ApiProperty({
+    description: 'Thông tin danh mục',
+    example: {
+      id: '6151f3d2e149e32b3404c8b7',
+      name: 'Điện thoại',
+    },
+    required: false,
+  })
+  category?: {
+    id: string;
+    name: string;
+  };
+
+  @ApiProperty({
     description: 'Trạng thái tồn kho',
     example: true,
   })

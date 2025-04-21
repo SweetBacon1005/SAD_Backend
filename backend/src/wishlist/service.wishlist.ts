@@ -336,4 +336,4 @@ export class WishlistService {
       updatedAt: wishlist.updatedAt,
     };
   }
-}
+} 

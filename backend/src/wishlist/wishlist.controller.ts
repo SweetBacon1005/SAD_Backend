@@ -1,137 +1,104 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Req, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { WishlistService } from './wishlist.service';
-import { CreateWishlistDto } from './dto/create-wishlist.dto';
-import { UpdateWishlistDto } from './dto/update-wishlist.dto';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AddWishlistItemDto } from './dto/add-wishlist-item.dto';
+import { WishlistFilterDto } from './dto/pagination-wishlist.dto';
 import { WishlistResponseDto } from './dto/wishlist-response.dto';
-import { WishlistFilterDto, WishlistItemFilterDto, WishlistListResponseDto, WishlistDetailResponseDto } from './dto/pagination-wishlist.dto';
-import { UserRole } from '@prisma/client';
-import { RolesGuard } from '../common/guards/role.guard';
-import { Roles } from '@/common/decorators/role.decorator';
+import { WishlistService } from './wishlist.service';
 
-@ApiTags('wishlists')
-@Controller('wishlists')
-@ApiBearerAuth()
+@ApiTags('wishlist')
+@Controller('wishlist')
 export class WishlistController {
   constructor(private readonly wishlistService: WishlistService) {}
 
-  @Post()
-  @Roles(UserRole.CUSTOMER)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Tạo danh sách yêu thích mới' })
-  @ApiResponse({ status: 201, description: 'Danh sách yêu thích đã được tạo', type: WishlistResponseDto })
-  create(@Req() req, @Body() createWishlistDto: CreateWishlistDto): Promise<WishlistResponseDto> {
-    return this.wishlistService.create(req.user.id, createWishlistDto);
-  }
-
   @Get()
+  @ApiOperation({
+    summary: 'Lấy hoặc tạo mới wishlist của người dùng hiện tại',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Wishlist đã được tìm thấy hoặc tạo mới.',
+    type: WishlistResponseDto,
+  })
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Lấy danh sách yêu thích của người dùng đang đăng nhập (có phân trang)' })
-  @ApiQuery({ name: 'search', required: false, description: 'Tìm kiếm theo tên danh sách' })
-  @ApiQuery({ name: 'sortBy', required: false, description: 'Trường để sắp xếp (createdAt, updatedAt, name)' })
-  @ApiQuery({ name: 'sortOrder', required: false, description: 'Thứ tự sắp xếp (asc, desc)' })
-  @ApiQuery({ name: 'currentPage', required: false, description: 'Trang hiện tại' })
-  @ApiQuery({ name: 'pageSize', required: false, description: 'Số lượng trên mỗi trang' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Trả về danh sách yêu thích của người dùng có phân trang', 
-    type: WishlistListResponseDto 
-  })
-  findAll(
-    @Req() req,
-    @Query() filter: WishlistFilterDto
-  ): Promise<WishlistListResponseDto> {
-    return this.wishlistService.findAll(req.user.id, filter);
-  }
-
-  @Get('public')
-  @ApiOperation({ summary: 'Lấy danh sách các danh sách yêu thích công khai (có phân trang)' })
-  @ApiQuery({ name: 'search', required: false, description: 'Tìm kiếm theo tên danh sách' })
-  @ApiQuery({ name: 'sortBy', required: false, description: 'Trường để sắp xếp (createdAt, updatedAt, name)' })
-  @ApiQuery({ name: 'sortOrder', required: false, description: 'Thứ tự sắp xếp (asc, desc)' })
-  @ApiQuery({ name: 'currentPage', required: false, description: 'Trang hiện tại' })
-  @ApiQuery({ name: 'pageSize', required: false, description: 'Số lượng trên mỗi trang' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Trả về danh sách yêu thích công khai có phân trang', 
-    type: WishlistListResponseDto 
-  })
-  findPublic(
-    @Query() filter: WishlistFilterDto
-  ): Promise<WishlistListResponseDto> {
-    return this.wishlistService.findPublic(filter);
-  }
-
-  @Get(':id')
-  @ApiOperation({ summary: 'Lấy thông tin chi tiết một danh sách yêu thích với các sản phẩm có phân trang' })
-  @ApiParam({ name: 'id', description: 'ID của danh sách yêu thích' })
-  @ApiQuery({ name: 'search', required: false, description: 'Tìm kiếm sản phẩm theo tên' })
-  @ApiQuery({ name: 'currentPage', required: false, description: 'Trang hiện tại của danh sách sản phẩm' })
-  @ApiQuery({ name: 'pageSize', required: false, description: 'Số sản phẩm trên mỗi trang' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Trả về thông tin danh sách yêu thích với sản phẩm có phân trang', 
-    type: WishlistDetailResponseDto 
-  })
-  findOne(
-    @Param('id') id: string, 
-    @Req() req,
-    @Query() filter: WishlistItemFilterDto
-  ): Promise<WishlistDetailResponseDto> {
-    return this.wishlistService.findOne(id, req.user?.id, filter);
-  }
-
-  @Patch(':id')
-  @Roles(UserRole.CUSTOMER)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Cập nhật danh sách yêu thích' })
-  @ApiParam({ name: 'id', description: 'ID của danh sách yêu thích' })
-  @ApiResponse({ status: 200, description: 'Danh sách yêu thích đã được cập nhật', type: WishlistResponseDto })
-  update(
-    @Param('id') id: string,
-    @Req() req,
-    @Body() updateWishlistDto: UpdateWishlistDto,
+  async getUserWishlist(
+    @Req() req: Request,
+    @Query() filter: WishlistFilterDto,
   ): Promise<WishlistResponseDto> {
-    return this.wishlistService.update(id, req.user.id, updateWishlistDto);
+    const userId = req['user'].id;
+    const result = await this.wishlistService.findAll(userId, filter);
+    return result.data[0];
   }
 
-  @Delete(':id')
-  @Roles(UserRole.CUSTOMER)
+  @Post('add-item')
+  @ApiOperation({
+    summary: 'Thêm sản phẩm vào wishlist của người dùng hiện tại',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Sản phẩm đã được thêm vào wishlist.',
+    type: WishlistResponseDto,
+  })
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Xóa danh sách yêu thích' })
-  @ApiParam({ name: 'id', description: 'ID của danh sách yêu thích' })
-  @ApiResponse({ status: 200, description: 'Danh sách yêu thích đã được xóa' })
-  remove(@Param('id') id: string, @Req() req): Promise<void> {
-    return this.wishlistService.remove(id, req.user.id);
-  }
-
-  @Post(':id/items')
-  @Roles(UserRole.CUSTOMER)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Thêm sản phẩm vào danh sách yêu thích' })
-  @ApiParam({ name: 'id', description: 'ID của danh sách yêu thích' })
-  @ApiResponse({ status: 201, description: 'Sản phẩm đã được thêm vào danh sách', type: WishlistResponseDto })
-  addItem(
-    @Param('id') id: string,
-    @Req() req,
+  async addItem(
+    @Req() req: Request,
     @Body() addItemDto: AddWishlistItemDto,
   ): Promise<WishlistResponseDto> {
-    return this.wishlistService.addItem(id, req.user.id, addItemDto);
+    const userId = req['user'].id;
+    const wishlistList = await this.wishlistService.findAll(userId);
+    const wishlistId = wishlistList.data[0].id;
+    return this.wishlistService.addItem(wishlistId, userId, addItemDto);
   }
 
-  @Delete(':id/items/:itemId')
-  @Roles(UserRole.CUSTOMER)
+  @Delete('items/:productId')
+  @ApiOperation({
+    summary: 'Xóa sản phẩm khỏi wishlist của người dùng hiện tại',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sản phẩm đã được xóa khỏi wishlist.',
+    type: WishlistResponseDto,
+  })
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Xóa sản phẩm khỏi danh sách yêu thích' })
-  @ApiParam({ name: 'id', description: 'ID của danh sách yêu thích' })
-  @ApiParam({ name: 'itemId', description: 'ID của mục trong danh sách yêu thích' })
-  @ApiResponse({ status: 200, description: 'Sản phẩm đã được xóa khỏi danh sách', type: WishlistResponseDto })
-  removeItem(
-    @Param('id') id: string,
-    @Param('itemId') itemId: string,
-    @Req() req,
+  @ApiParam({ name: 'productId', description: 'ID của sản phẩm' })
+  async removeItem(
+    @Req() req: Request,
+    @Param('productId') productId: string,
   ): Promise<WishlistResponseDto> {
-    return this.wishlistService.removeItem(id, itemId, req.user.id);
+    const userId = req['user'].id;
+    const wishlistList = await this.wishlistService.findAll(userId);
+    const wishlistId = wishlistList.data[0].id;
+    return this.wishlistService.removeItem(wishlistId, userId, productId);
   }
-} 
+
+  @Delete('items')
+  @ApiOperation({
+    summary: 'Xóa tất cả sản phẩm khỏi wishlist của người dùng hiện tại',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tất cả sản phẩm đã được xóa khỏi wishlist.',
+    type: WishlistResponseDto,
+  })
+  @ApiBearerAuth()
+  async clearItems(@Req() req: Request): Promise<WishlistResponseDto> {
+    const userId = req['user'].id;
+    const wishlistList = await this.wishlistService.findAll(userId);
+    const wishlistId = wishlistList.data[0].id;
+    return this.wishlistService.clearItems(wishlistId, userId);
+  }
+}

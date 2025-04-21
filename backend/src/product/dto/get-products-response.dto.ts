@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ProductResponseDto } from './product-response.dto';
 
-export class GetAllProductsResponseDto {
+export class GetProductsResponseDto {
     @ApiProperty({ description: 'Trang hiện tại', example: 1 })
     currentPage: number;
 
