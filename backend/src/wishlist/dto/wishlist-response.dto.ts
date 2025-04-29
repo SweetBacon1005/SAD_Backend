@@ -15,11 +15,11 @@ class ProductDto {
   @ApiProperty({ description: 'Tên sản phẩm', example: 'Áo Thun Oversize' })
   name: string;
 
-  @ApiProperty({ description: 'Giá sản phẩm', example: 150000 })
-  price: number;
+  @ApiProperty({ description: 'Giá cơ bản', example: 120000 })
+  basePrice: number;
 
-  @ApiPropertyOptional({ description: 'Hình ảnh sản phẩm', example: 'image.jpg' })
-  image: string | null;
+  @ApiProperty({ description: 'Danh sách hình ảnh', type: [String], example: ['url1.jpg', 'url2.jpg'] })
+  images: string[];
 }
 
 export class WishlistItemResponseDto {

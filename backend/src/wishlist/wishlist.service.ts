@@ -304,11 +304,8 @@ export class WishlistService {
       product: {
         id: item.product.id,
         name: item.product.name,
-        price: item.product.basePrice,
-        image:
-          item.product.images && item.product.images.length > 0
-            ? item.product.images[0]
-            : null,
+        basePrice: item.product.basePrice,
+        images: item.product.images
       },
       note: item.note,
       addedAt: item.addedAt,
@@ -325,9 +322,8 @@ export class WishlistService {
           product: {
             id: item.product.id,
             name: item.product.name,
-            price: item.product.basePrice,
-            image:
-              item.product.images?.length > 0 ? item.product.images[0] : null,
+            basePrice: item.product.basePrice,
+            images: item.product.images,
           },
           note: item.note,
           addedAt: item.addedAt,
