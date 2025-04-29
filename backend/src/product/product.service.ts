@@ -13,9 +13,11 @@ import { ProductComparisonResponseDto } from './dto/product-comparison-response.
 import {
   ProductDetailResponseDto,
   ProductResponseDto,
+  RecommendProductsResponseDto,
 } from './dto/product-response.dto';
 import { SearchProductResponseDto } from './dto/search-product-response.dto';
 import { SearchProductDto } from './dto/search-product.dto';
+import axios from 'axios';
 
 @Injectable()
 export class ProductService {
@@ -24,9 +26,6 @@ export class ProductService {
   private mapProductToResponse(product: any): ProductResponseDto {
     return {
       ...product,
-      metadata: product.metadata
-        ? JSON.parse(JSON.stringify(product.metadata))
-        : null,
       variants: product.variants?.map((variant) => ({
         ...variant,
         attributes: variant.attributes
@@ -40,30 +39,56 @@ export class ProductService {
     return products.map(this.mapProductToResponse);
   }
 
+  async getRecommendProducts(
+    user_id: string,
+  ): Promise<RecommendProductsResponseDto> {
+    const response = await axios.get(`http://127.0.0.1:5000/recommend?user_id=${user_id}`);
+
+    if (response.status !== 200) {
+      throw new BadRequestException('Failed to fetch recommended products');
+    }
+
+    const { recommendIds, popularIds } = response.data;
+
+    const [recommends, populars] = await Promise.all([
+      recommendIds.length > 0
+      ? this.prisma.product.findMany({
+          where: { id: { in: recommendIds } },
+        })
+      : Promise.resolve([]),
+
+      popularIds.length > 0
+        ? this.prisma.product.findMany({
+            where: { id: { in: popularIds } },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    return {
+      recommends: this.mapProductsToResponse(recommends),
+      populars: this.mapProductsToResponse(populars),
+    }
+  }
+
   async createProduct(data: CreateProductDto) {
     try {
       const product = await this.prisma.product.create({
         data: {
           name: data.name,
-          slug: data.slug,
           description: data.description ?? '',
           basePrice: data.basePrice,
           storeId: data.storeId ?? null,
           images: data.images ?? [],
-          metadata: data.metadata ? (data.metadata as Prisma.JsonObject) : {},
+          options: data.options ? (data.options as Prisma.JsonObject) : {},
           categoryId: data.categoryId || null,
           variants: data.variants?.length
             ? {
                 create: data.variants.map((variant) => ({
-                  name: variant.name,
-                  description: variant.description ?? '',
                   price: variant.price,
-                  costPrice: variant.costPrice,
                   quantity: variant.quantity,
                   attributes: variant.attributes
                     ? (variant.attributes as Prisma.JsonObject)
                     : {},
-                  images: variant.images ?? [],
                 })),
               }
             : undefined,
@@ -93,24 +118,11 @@ export class ProductService {
     const pageSize = Number(payload.pageSize) || 10;
     const skip = (currentPage - 1) * pageSize;
 
-    const where: Prisma.ProductWhereInput = {
-      categoryId: payload.categoryId || undefined,
-      basePrice: {
-        ...(payload.minPrice ? { gte: payload.minPrice } : {}),
-        ...(payload.maxPrice ? { lte: payload.maxPrice } : {}),
-      },
-    };
-
     const [total, products] = await Promise.all([
-      this.prisma.product.count({ where }),
+      this.prisma.product.count(),
       this.prisma.product.findMany({
-        where,
         skip,
         take: pageSize,
-        include: {
-          variants: true,
-          category: true,
-        },
         orderBy: { createdAt: 'desc' },
       }),
     ]);
@@ -137,24 +149,24 @@ export class ProductService {
       throw new NotFoundException('Product not found');
     }
 
-    return {
-      ...this.mapProductToResponse(product),
-      reviews: product.reviews,
-    };
-  }
-
-  async getProductBySlug(slug: string): Promise<ProductDetailResponseDto> {
-    const product = await this.prisma.product.findFirst({
-      where: { slug },
-      include: {
-        variants: true,
-        category: true,
-        reviews: true,
-      },
-    });
-
-    if (!product) {
-      throw new NotFoundException('Product not found');
+    const response = await axios.get(`http://127.0.0.1:5000/similar?product_id=${id}`);
+    if(response.status === 200){
+      const similars = await this.prisma.product.findMany({
+        where: {
+          id: {
+            in: response.data,
+          },
+        },
+        include: {
+          variants: true,
+          category: true,
+        },
+      });
+      return {
+        ...this.mapProductToResponse(product),
+        reviews: product.reviews,
+        similars: similars.map(this.mapProductToResponse),
+      };
     }
 
     return {
@@ -162,6 +174,8 @@ export class ProductService {
       reviews: product.reviews,
     };
   }
+
+  
 
   async updateProduct(
     id: string,
@@ -172,14 +186,13 @@ export class ProductService {
         where: { id },
         data: {
           ...(data.name && { name: data.name }),
-          ...(data.slug && { slug: data.slug }),
           ...(data.description && { description: data.description }),
           ...(data.basePrice !== undefined && { basePrice: data.basePrice }),
           ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
           ...(data.storeId && { storeId: data.storeId }),
           ...(data.images && { images: data.images }),
-          ...(data.metadata && {
-            metadata: data.metadata as Prisma.JsonObject,
+          ...(data.options && {
+            options: data.options as Prisma.JsonObject,
           }),
         },
         include: {
@@ -207,16 +220,44 @@ export class ProductService {
   async searchProducts(
     payload: SearchProductDto,
   ): Promise<SearchProductResponseDto> {
-    const currentPage = Number(payload.currentPage);
-    const pageSize = Number(payload.pageSize);
+    const currentPage = Number(payload.currentPage) || 1;
+    const pageSize = Number(payload.pageSize) || 10;
     const skip = (currentPage - 1) * pageSize;
+  
+    const query = payload.query?.trim();
+    const categoryId = payload.categoryId;
+    const sort = payload?.sort;
+    const minPrice = payload.minPrice;
+    const maxPrice = payload.maxPrice;
+  
+    const where: Prisma.ProductWhereInput = {};
+  
+    if (query) {
+      where.OR = [
+        { name: { contains: query, mode: 'insensitive' } },
+      ];
+    }
+  
+    if (categoryId) {
+      where.categoryId = categoryId;
+    }
 
-    const where: Prisma.ProductWhereInput = {
-      OR: [
-        { name: { contains: payload.query, mode: 'insensitive' } },
-        { description: { contains: payload.query, mode: 'insensitive' } },
-      ],
-    };
+    if (minPrice && maxPrice){
+      where.basePrice = {
+        gte: minPrice,
+        lte: maxPrice,
+      };
+    }
+
+    let orderBy: Prisma.ProductOrderByWithRelationInput = { createdAt: 'desc' };
+    if (sort) {
+      const [field, direction] = sort.split(':');
+      if ((field === 'Price' || field === 'CreatedAt') &&(direction === 'asc' || direction === 'desc')) {
+        orderBy = {
+          [field === 'Price' ? 'basePrice' : 'createdAt']: direction,
+        } as Prisma.ProductOrderByWithRelationInput;
+      }
+    }
 
     const [total, products] = await Promise.all([
       this.prisma.product.count({ where }),
@@ -228,10 +269,10 @@ export class ProductService {
           variants: true,
           category: true,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy
       }),
     ]);
-
+  
     return {
       currentPage,
       totalPages: Math.ceil(total / pageSize),
@@ -239,7 +280,7 @@ export class ProductService {
       data: this.mapProductsToResponse(products),
     };
   }
-
+  
   async compareProducts(
     productIds: string[],
     currentPage: number = 1,
@@ -282,7 +323,6 @@ export class ProductService {
       return {
         id: product.id,
         name: product.name,
-        slug: product.slug,
         price: product.basePrice,
         image: product.images.length ? product.images[0] : '',
         description: product.description || '',
@@ -291,15 +331,11 @@ export class ProductService {
         variantCount: product.variants.length,
         variants: product.variants.map((variant) => ({
           id: variant.id,
-          name: variant.name,
-          description: variant.description,
           price: variant.price,
-          costPrice: variant.costPrice,
           quantity: variant.quantity,
           attributes: variant.attributes
             ? JSON.parse(JSON.stringify(variant.attributes))
             : {},
-          images: variant.images,
         })),
       };
     });
@@ -315,21 +351,21 @@ export class ProductService {
       },
     ];
 
-    const allMetadataKeys = new Set<string>();
+    const alloptionsKeys = new Set<string>();
     products.forEach((product) => {
-      if (product.metadata) {
-        const metadata = JSON.parse(JSON.stringify(product.metadata));
-        Object.keys(metadata).forEach((key) => allMetadataKeys.add(key));
+      if (product.options) {
+        const options = JSON.parse(JSON.stringify(product.options));
+        Object.keys(options).forEach((key) => alloptionsKeys.add(key));
       }
     });
 
-    allMetadataKeys.forEach((key) => {
+    alloptionsKeys.forEach((key) => {
       features.push({
         name: key,
         values: products.map((product) => {
-          if (product.metadata) {
-            const metadata = JSON.parse(JSON.stringify(product.metadata));
-            const value = metadata[key];
+          if (product.options) {
+            const options = JSON.parse(JSON.stringify(product.options));
+            const value = options[key];
             return value !== undefined
               ? Array.isArray(value)
                 ? value.join(', ')
@@ -451,14 +487,11 @@ export class ProductService {
 
       const transformedVariants = product.variants.map((variant) => ({
         id: variant.id,
-        name: variant.name,
         price: variant.price,
         quantity: variant.quantity,
-        description: variant.description,
         attributes: variant.attributes
           ? JSON.parse(JSON.stringify(variant.attributes))
           : null,
-        images: variant.images,
       }));
 
       return {
@@ -469,16 +502,16 @@ export class ProductService {
         productName: product.name,
         price: lowestVariantPrice,
         imageUrl: product.images.length ? product.images[0] : '',
-        productUrl: `/products/${product.slug}`,
         inStock: productInStock,
+        productUrl: `/products/${product.id}`,
         category: product.category
           ? {
               id: product.category.id,
               name: product.category.name,
             }
           : undefined,
-        promotion: product.metadata
-          ? JSON.parse(JSON.stringify(product.metadata)).promotion || null
+        promotion: product.options
+          ? JSON.parse(JSON.stringify(product.options)).promotion || null
           : null,
         variants: transformedVariants,
       };

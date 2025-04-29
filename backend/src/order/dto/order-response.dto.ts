@@ -30,12 +30,6 @@ export class OrderItemResponseDto {
     example: '6151f3d2e149e32b3404c8c7' 
   })
   variantId?: string;
-  
-  @ApiPropertyOptional({ 
-    description: 'Tên biến thể (nếu có)', 
-    example: 'Size M - Màu Đỏ' 
-  })
-  variantName?: string;
 
   @ApiProperty({ description: 'Số lượng', example: 2 })
   quantity: number;

@@ -49,9 +49,9 @@ model Address {
 
 model Category {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
-  name        String
-  slug        String    @unique
+  name        String    @unique
   description String?
+  image       String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime? @updatedAt
   products    Product[]
@@ -60,7 +60,6 @@ model Category {
 model Product {
   id            String           @id @default(auto()) @map("_id") @db.ObjectId
   name          String
-  slug          String
   description   String?
   basePrice     Float            @default(0)
   quantity      Int              @default(0)
@@ -69,7 +68,7 @@ model Product {
   storeId       String?          @db.ObjectId
   store         Store?           @relation(fields: [storeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   images        String[]
-  metadata      Json?
+  options       Json?
   variants      ProductVariant[]
   createdAt     DateTime         @default(now())
   updatedAt     DateTime?        @updatedAt
@@ -83,13 +82,10 @@ model ProductVariant {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
   productId   String    @db.ObjectId
   product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  name        String
-  description String
   price       Float     @default(0)
   costPrice   Float     @default(0)
   quantity    Int       @default(0)
   attributes  Json?
-  images      String[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime? @updatedAt
 }

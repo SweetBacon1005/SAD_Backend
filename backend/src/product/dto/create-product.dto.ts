@@ -18,13 +18,6 @@ export class CreateProductDto {
   @IsString()
   name: string;
 
-  @ApiProperty({
-    description: 'Slug sản phẩm (URL-friendly)',
-    example: 'ao-thun-oversize-form-rong'
-  })
-  @IsString()
-  slug: string;
-
   @ApiPropertyOptional({
     description: 'Mô tả chi tiết sản phẩm',
     example: 'Áo thun oversize phong cách Hàn Quốc, chất liệu cotton 100%, thoáng mát'
@@ -76,7 +69,7 @@ export class CreateProductDto {
   })
   @IsOptional()
   @IsObject()
-  metadata?: Record<string, any>;
+  options?: Record<string, any>;
 
   @ApiPropertyOptional({
     description: 'Danh sách các biến thể của sản phẩm',
@@ -96,14 +89,6 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   name?: string;
-
-  @ApiPropertyOptional({
-    description: 'Slug sản phẩm cần cập nhật',
-    example: 'ao-thun-oversize-form-rong-premium'
-  })
-  @IsOptional()
-  @IsString()
-  slug?: string;
 
   @ApiPropertyOptional({
     description: 'Mô tả cần cập nhật',
@@ -159,7 +144,7 @@ export class UpdateProductDto {
   })
   @IsOptional()
   @IsObject()
-  metadata?: Record<string, any>;
+  options?: Record<string, any>;
 
   @ApiPropertyOptional({
     description: 'Danh sách biến thể cần cập nhật',

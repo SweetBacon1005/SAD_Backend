@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsNumber, IsString, Min } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SearchProductDto {
@@ -10,10 +10,10 @@ export class SearchProductDto {
     default: 1
   })
   @IsNumber()
-  @IsNotEmpty()
+  @IsOptional()
   @Min(1)
   @Type(() => Number)
-  currentPage: number;
+  currentPage?: number;
 
   @ApiProperty({
     description: 'Số sản phẩm trên mỗi trang',
@@ -22,16 +22,55 @@ export class SearchProductDto {
     default: 10
   })
   @IsNumber()
-  @IsNotEmpty()
+  @IsOptional()
   @Min(1)
   @Type(() => Number)
-  pageSize: number;
+  pageSize?: number;
 
   @ApiProperty({
     description: 'Từ khóa tìm kiếm',
     example: 'áo thun'
   })
   @IsString()
-  @IsNotEmpty()
-  query: string;
+  @IsOptional()
+  query?: string;
+
+  @ApiProperty({
+    description: 'ID danh mục để lọc sản phẩm',
+    example: '6151f3d2e149e32b3404c8b5'
+  })
+  @IsString()
+  @IsOptional()
+  categoryId?: string;
+
+  @ApiProperty({
+    description: 'Sắp xếp',
+    example: 'Price:asc',
+    enum: ['Price:asc', 'Price:desc', 'CreatedAt:asc', 'CreatedAt:desc'],
+  })
+  @IsString()
+  @IsOptional()
+  sort?: string;
+
+  @ApiProperty({
+    description: 'Giá tối thiểu (VND)',
+    example: 100000,
+    minimum: 0
+  })
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  minPrice?: number;
+
+  @ApiProperty({
+    description: 'Giá tối đa (VND)',
+    example: 500000,
+    minimum: 0
+  })
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  maxPrice?: number;
 }

@@ -7,9 +7,6 @@ export class CategoryResponseDto {
   @ApiProperty({ description: 'Tên danh mục', example: 'Áo Thun' })
   name: string;
 
-  @ApiProperty({ description: 'Slug danh mục', example: 'ao-thun' })
-  slug: string;
-
   @ApiPropertyOptional({ description: 'Mô tả danh mục', example: 'Các loại áo thun thời trang' })
   description: string | null;
 

@@ -9,9 +9,6 @@ export class ProductResponseDto {
   @ApiProperty({ description: 'Tên sản phẩm', example: 'Áo Thun Oversize' })
   name: string;
 
-  @ApiProperty({ description: 'Slug sản phẩm', example: 'ao-thun-oversize' })
-  slug: string;
-
   @ApiPropertyOptional({ description: 'Mô tả sản phẩm', example: 'Áo thun oversize phong cách Hàn Quốc' })
   description: string | null;
 
@@ -28,7 +25,7 @@ export class ProductResponseDto {
   images: string[];
 
   @ApiPropertyOptional({ description: 'Thông tin bổ sung', example: { color: ['Đỏ', 'Đen'], sizes: ['S', 'M', 'L'] } })
-  metadata: Record<string, any> | null;
+  options: Record<string, any> | null;
 
   @ApiProperty({ description: 'Danh sách biến thể', type: [ProductVariantResponseDto] })
   variants: ProductVariantResponseDto[];
@@ -43,6 +40,9 @@ export class ProductResponseDto {
 export class ProductDetailResponseDto extends ProductResponseDto {
   @ApiPropertyOptional({ description: 'Đánh giá sản phẩm', type: [Object], example: [] })
   reviews: any[];
+
+  @ApiProperty({ description: 'Sản phẩm tương tự', type: [ProductResponseDto] })
+  similars?: ProductResponseDto[];
 }
 
 export class ProductPaginationResponseDto {
@@ -58,3 +58,17 @@ export class ProductPaginationResponseDto {
   @ApiProperty({ description: 'Danh sách sản phẩm', type: [ProductResponseDto] })
   data: ProductResponseDto[];
 } 
+
+export class RecommendProductsResponseDto {
+  @ApiProperty({ 
+      description: 'Sản phẩm được đề xuất',
+      type: [ProductResponseDto]
+  })
+  recommends?: ProductResponseDto[];
+
+  @ApiProperty({
+      description: 'Sản phẩm phổ biến',
+      type: [ProductResponseDto]
+  })
+  populars: ProductResponseDto[];
+}

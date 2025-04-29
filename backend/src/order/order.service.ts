@@ -17,16 +17,12 @@ import { PagedResponseDto, PaginationDto } from './dto/pagination.dto';
 
 interface ProductVariant {
   id: string;
-  name: string;
   price: number;
   quantity: number;
   attributes: any;
   productId: string;
   createdAt: Date;
   updatedAt: Date | null;
-  description: string;
-  costPrice: number;
-  images: string[];
 }
 
 interface Product {
@@ -129,7 +125,7 @@ export class OrderService {
 
               if (selectedVariant.quantity < item.quantity) {
                 throw new BadRequestException(
-                  `Số lượng biến thể ${selectedVariant.name} của sản phẩm ${product.name} không đủ. Hiện có: ${selectedVariant.quantity}, Yêu cầu: ${item.quantity}`,
+                  `Số lượng biến thể của sản phẩm ${product.name} không đủ. Hiện có: ${selectedVariant.quantity}, Yêu cầu: ${item.quantity}`,
                 );
               }
             } else if (
@@ -163,8 +159,7 @@ export class OrderService {
 
             let selectedVariant: ProductVariant | null = null;
             if (item.variantId) {
-              selectedVariant =
-                product.variants.find((v) => v.id === item.variantId) || null;
+              selectedVariant = product.variants.find((v) => v.id === item.variantId) || null;
 
               if (!selectedVariant) {
                 throw new NotFoundException(
@@ -174,7 +169,7 @@ export class OrderService {
 
               if (selectedVariant.quantity < item.quantity) {
                 throw new BadRequestException(
-                  `Số lượng biến thể ${selectedVariant.name} của sản phẩm ${product.name} không đủ. Hiện có: ${selectedVariant.quantity}, Yêu cầu: ${item.quantity}`,
+                  `Số lượng biến thể của sản phẩm ${product.name} không đủ. Hiện có: ${selectedVariant.quantity}, Yêu cầu: ${item.quantity}`,
                 );
               }
             } else if (

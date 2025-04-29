@@ -14,17 +14,18 @@ export class CategoryResponseDto {
   name: string;
 
   @ApiProperty({
-    description: 'Slug danh mục',
-    example: 'dien-thoai',
-  })
-  slug: string;
-
-  @ApiProperty({
     description: 'Mô tả danh mục',
     example: 'Danh mục các loại điện thoại',
     nullable: true,
   })
   description: string | null;
+
+  @ApiProperty({
+    description: 'Hình ảnh danh mục',
+    example: 'https://example.com/image.jpg',
+    nullable: true, 
+  })
+  image: string | null;
 
   @ApiProperty({
     description: 'Số lượng sản phẩm trong danh mục',

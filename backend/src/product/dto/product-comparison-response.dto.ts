@@ -23,28 +23,10 @@ export class ComparisonVariantDto {
   id: string;
 
   @ApiProperty({
-    description: 'Tên biến thể sản phẩm',
-    example: 'Size M - Màu Đỏ',
-  })
-  name: string;
-
-  @ApiProperty({
-    description: 'Mô tả biến thể',
-    example: 'Size M màu đỏ, phù hợp với người từ 50-60kg',
-  })
-  description: string;
-
-  @ApiProperty({
     description: 'Giá bán',
     example: 150000,
   })
   price: number;
-
-  @ApiProperty({
-    description: 'Giá nhập',
-    example: 100000,
-  })
-  costPrice: number;
 
   @ApiProperty({
     description: 'Số lượng tồn kho',
@@ -57,12 +39,6 @@ export class ComparisonVariantDto {
     example: { color: 'Đỏ', size: 'M', material: 'Cotton' },
   })
   attributes: Record<string, any>;
-
-  @ApiProperty({
-    description: 'Danh sách hình ảnh',
-    example: ['url1.jpg', 'url2.jpg'],
-  })
-  images: string[];
 }
 
 export class ProductComparisonItemDto {
@@ -77,12 +53,6 @@ export class ProductComparisonItemDto {
     example: 'Áo Thun Oversize',
   })
   name: string;
-
-  @ApiProperty({
-    description: 'Đường dẫn slug của sản phẩm',
-    example: 'ao-thun-oversize',
-  })
-  slug: string;
 
   @ApiProperty({
     description: 'Giá sản phẩm',

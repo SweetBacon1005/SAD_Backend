@@ -18,4 +18,12 @@ export class CreateCategoryDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiProperty({
+    description: 'Hình ảnh danh mục',
+    example: 'https://example.com/image.jpg',
+    required: false,
+  })
+  @IsOptional()
+  image?: string;
 } 

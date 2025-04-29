@@ -67,21 +67,6 @@ export class CategoryController {
     return this.categoryService.findOne(id);
   }
 
-  @Get('slug/:slug')
-  @Public()
-  @ApiOperation({ summary: 'Lấy danh mục theo slug' })
-  @ApiParam({ name: 'slug', description: 'Slug danh mục' })
-  @ApiResponse({
-    status: 200,
-    description: 'Trả về danh mục',
-    type: CategoryResponseDto,
-  })
-  async getCategoryBySlug(
-    @Param('slug') slug: string,
-  ): Promise<CategoryResponseDto> {
-    return this.categoryService.findBySlug(slug);
-  }
-
   @Put(':id')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Cập nhật danh mục' })

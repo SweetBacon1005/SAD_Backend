@@ -10,6 +10,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -34,6 +35,7 @@ import { ProductComparisonRequestDto } from './dto/product-comparison.dto';
 import {
   ProductDetailResponseDto,
   ProductResponseDto,
+  RecommendProductsResponseDto,
 } from './dto/product-response.dto';
 import { SearchProductResponseDto } from './dto/search-product-response.dto';
 import { SearchProductDto } from './dto/search-product.dto';
@@ -44,6 +46,19 @@ import { ProductService } from './product.service';
 @ApiBearerAuth()
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
+
+  @Get('recommend')
+  @Public()
+  @ApiOperation({ summary: 'Lấy danh sách sản phẩm được đề xuất' })
+  @ApiOkResponse({
+    description: 'Danh sách sản phẩm được đề xuất',
+    type: RecommendProductsResponseDto,
+  })
+  async getRecommendProducts(
+    @Query('user_id') user_id: string,
+  ): Promise<RecommendProductsResponseDto> {
+    return this.productService.getRecommendProducts(user_id);
+  }
 
   @Post('get-products')
   @Public()
@@ -116,28 +131,6 @@ export class ProductController {
       payload.currentPage,
       payload.pageSize,
     );
-  }
-
-  @Get('slug/:slug')
-  @Public()
-  @ApiOperation({ summary: 'Lấy thông tin sản phẩm theo slug' })
-  @ApiParam({ name: 'slug', description: 'Slug sản phẩm' })
-  @ApiOkResponse({
-    description: 'Thông tin chi tiết sản phẩm',
-    type: ProductDetailResponseDto,
-  })
-  @ApiResponse({
-    status: HttpStatus.NOT_FOUND,
-    description: 'Không tìm thấy sản phẩm',
-  })
-  async getProductBySlug(
-    @Param('slug') slug: string,
-  ): Promise<ProductDetailResponseDto> {
-    const product = await this.productService.getProductBySlug(slug);
-    if (!product) {
-      throw new NotFoundException(`Không tìm thấy sản phẩm với slug ${slug}`);
-    }
-    return product;
   }
 
   @Get(':id')

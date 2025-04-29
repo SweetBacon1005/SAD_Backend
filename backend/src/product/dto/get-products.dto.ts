@@ -26,34 +26,4 @@ export class GetProductsDto {
   @Min(1)
   @Type(() => Number)
   pageSize?: number;
-
-  @ApiPropertyOptional({
-    description: 'ID danh mục cần lọc',
-    example: '6151f3d2e149e32b3404c8d1'
-  })
-  @IsString()
-  @IsOptional()
-  categoryId?: string;
-
-  @ApiPropertyOptional({
-    description: 'Giá tối thiểu (VND)',
-    example: 100000,
-    minimum: 0
-  })
-  @IsNumber()
-  @IsOptional()
-  @Min(0)
-  @Type(() => Number)
-  minPrice?: number;
-
-  @ApiPropertyOptional({
-    description: 'Giá tối đa (VND)',
-    example: 500000,
-    minimum: 0
-  })
-  @IsNumber()
-  @IsOptional()
-  @Min(0)
-  @Type(() => Number)
-  maxPrice?: number;
 }
