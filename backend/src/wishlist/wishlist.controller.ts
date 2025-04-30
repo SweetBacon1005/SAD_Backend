@@ -56,8 +56,8 @@ export class WishlistController {
   @ApiBearerAuth()
   async searchUserWishlist(
     @Req() req: Request,
-    @Query() filter: WishlistFilterDto,
-  ): Promise<WishlistListResponseDto> {
+    @Body() filter: WishlistFilterDto,
+  ): Promise<any> {
     const userId = req['user'].id;
     const result = await this.wishlistService.search(userId, filter);
     return result;

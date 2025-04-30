@@ -173,32 +173,17 @@ export class WishlistService {
   async search(
     userId: string,
     filter: WishlistFilterDto = {},
-  ): Promise<WishlistListResponseDto> {
+  ): Promise<any> {
     const query = filter.query?.trim();
     const categoryId = filter.categoryId;
-    const sortBy = filter?.sortBy ?? 'createdAt';
-    const sortOrder = filter?.sortOrder?.toLowerCase() === 'asc' ? 'asc' : 'desc';
+    const sortBy = filter.sortBy ?? 'createdAt';
+    const sortOrder = filter.sortOrder?.toLowerCase() === 'asc' ? 'asc' : 'desc';
     const minPrice = filter.minPrice;
     const maxPrice = filter.maxPrice;
   
-    const where: Prisma.WishlistWhereInput = {
-      userId,
-      items: {
-        some: {
-          product: {
-            name: query ? { contains: query, mode: 'insensitive' } : undefined,
-            categoryId: categoryId || undefined,
-            basePrice: {
-              gte: minPrice ?? undefined,
-              lte: maxPrice ?? undefined,
-            },
-          },
-        },
-      },
-    };
-  
-    const wishlists = await this.prisma.wishlist.findMany({
-      where,
+    // Lấy wishlist của user
+    const wishlist = await this.prisma.wishlist.findUnique({
+      where: { userId },
       include: {
         items: {
           include: {
@@ -206,19 +191,52 @@ export class WishlistService {
           },
         },
       },
-      orderBy: {
-        [sortBy]: sortOrder,
-      },
-    })
+    });
+  
+    if (!wishlist) {
+      return { items: [], total: 0 };
+    }
     
+    // Lọc sản phẩm theo điều kiện
+    let filteredItems = wishlist.items.filter((item) => {
+      const product = item.product;
+  
+      if (query && query !== null && query !== undefined && query != "" && !product.name.toLowerCase().includes(query.toLowerCase())) {
+        return false;
+      }
+  
+      if (minPrice && minPrice !== null && minPrice !== undefined && product.basePrice < minPrice) {
+        return false;
+      }
+  
+      if (maxPrice && maxPrice !== null && maxPrice !== undefined && product.basePrice > maxPrice) {
+        return false;
+      }
+  
+      return true;
+    });
+  
+    // Sắp xếp
+    filteredItems.sort((a, b) => {
+      const valA = a.product[sortBy=="price" ? "basePrice" : sortBy];
+      const valB = b.product[sortBy=="price" ? "basePrice" : sortBy];
+  
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  
+    // Trả về kết quả
     return {
-      total: 0,
-      currentPage: 0,
-      totalPages: 0,
-      data: wishlists.map((w) => this.mapToResponseDto(w)),
+      total: filteredItems.length,
+      items: filteredItems.map((item) => ({
+        id: item.productId,
+        name: item.product.name,
+        basePrice: item.product.basePrice,
+        images: item.product.images,
+      })),
     };
   }
-  
 
   async addItem(
     wishlistId: string,
