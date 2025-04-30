@@ -14,6 +14,7 @@ import {
   WishlistItemResponseDto,
   WishlistResponseDto,
 } from './dto/wishlist-response.dto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class WishlistService {
@@ -132,7 +133,6 @@ export class WishlistService {
       currentPage: 1,
       totalPages: 1,
       total: 1,
-      timestamp: new Date().toISOString(),
     };
   }
 
@@ -169,6 +169,56 @@ export class WishlistService {
 
     return this.mapToResponseDto(wishlist);
   }
+
+  async search(
+    userId: string,
+    filter: WishlistFilterDto = {},
+  ): Promise<WishlistListResponseDto> {
+    const query = filter.query?.trim();
+    const categoryId = filter.categoryId;
+    const sortBy = filter?.sortBy ?? 'createdAt';
+    const sortOrder = filter?.sortOrder?.toLowerCase() === 'asc' ? 'asc' : 'desc';
+    const minPrice = filter.minPrice;
+    const maxPrice = filter.maxPrice;
+  
+    const where: Prisma.WishlistWhereInput = {
+      userId,
+      items: {
+        some: {
+          product: {
+            name: query ? { contains: query, mode: 'insensitive' } : undefined,
+            categoryId: categoryId || undefined,
+            basePrice: {
+              gte: minPrice ?? undefined,
+              lte: maxPrice ?? undefined,
+            },
+          },
+        },
+      },
+    };
+  
+    const wishlists = await this.prisma.wishlist.findMany({
+      where,
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+      },
+      orderBy: {
+        [sortBy]: sortOrder,
+      },
+    })
+    
+    return {
+      total: 0,
+      currentPage: 0,
+      totalPages: 0,
+      data: wishlists.map((w) => this.mapToResponseDto(w)),
+    };
+  }
+  
 
   async addItem(
     wishlistId: string,

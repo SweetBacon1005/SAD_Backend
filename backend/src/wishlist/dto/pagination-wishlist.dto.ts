@@ -10,10 +10,9 @@ import {
 } from 'class-validator';
 import { WishlistResponseDto } from './wishlist-response.dto';
 
-export enum WishlistSortField {
-  NAME = 'name',
+export enum SortField {
+  PRICE = 'price',
   CREATED_AT = 'createdAt',
-  UPDATED_AT = 'updatedAt',
 }
 
 export enum SortOrder {
@@ -22,16 +21,32 @@ export enum SortOrder {
 }
 
 export class WishlistFilterDto {
-  @ApiPropertyOptional({
+  @ApiProperty({
+    description: 'Từ khóa tìm kiếm',
+    example: 'áo thun',
+  })
+  @IsString()
+  @IsOptional()
+  query?: string;
+
+  @ApiProperty({
+    description: 'ID danh mục để lọc sản phẩm',
+    example: '6151f3d2e149e32b3404c8b5',
+  })
+  @IsString()
+  @IsOptional()
+  categoryId?: string;
+
+  @ApiProperty({
     description: 'Trường để sắp xếp',
-    enum: WishlistSortField,
-    default: WishlistSortField.CREATED_AT,
+    enum: SortField,
+    default: SortField.CREATED_AT,
   })
   @IsOptional()
-  @IsEnum(WishlistSortField)
-  sortBy?: WishlistSortField = WishlistSortField.CREATED_AT;
+  @IsEnum(SortField)
+  sortBy?: SortField = SortField.CREATED_AT;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Thứ tự sắp xếp',
     enum: SortOrder,
     default: SortOrder.DESC,
@@ -39,6 +54,28 @@ export class WishlistFilterDto {
   @IsOptional()
   @IsEnum(SortOrder)
   sortOrder?: SortOrder = SortOrder.DESC;
+
+  @ApiProperty({
+    description: 'Giá tối thiểu (VND)',
+    example: 100000,
+    minimum: 0,
+  })
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  minPrice?: number;
+
+  @ApiProperty({
+    description: 'Giá tối đa (VND)',
+    example: 500000,
+    minimum: 0,
+  })
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  maxPrice?: number;
 
   @ApiPropertyOptional({
     description: 'Trang hiện tại',
@@ -89,70 +126,7 @@ export class WishlistListResponseDto {
     example: 45,
   })
   total: number;
-
-  @ApiProperty({
-    description: 'Thời gian truy vấn (timestamp)',
-    example: '2023-04-05T10:30:40.000Z',
-  })
-  timestamp: string;
 }
 
-export class WishlistItemFilterDto {
-  @ApiPropertyOptional({
-    description: 'Tìm kiếm theo tên sản phẩm',
-    example: 'Áo thun',
-  })
-  @IsOptional()
-  @IsString()
-  search?: string;
 
-  @ApiPropertyOptional({
-    description: 'Trang hiện tại',
-    example: 1,
-    default: 1,
-    minimum: 1,
-  })
-  @IsNumber()
-  @IsOptional()
-  @Min(1)
-  @Type(() => Number)
-  currentPage?: number;
 
-  @ApiPropertyOptional({
-    description: 'Số sản phẩm trên mỗi trang',
-    example: 10,
-    default: 10,
-    minimum: 1,
-  })
-  @IsNumber()
-  @IsOptional()
-  @Min(1)
-  @Type(() => Number)
-  pageSize?: number;
-}
-
-export class WishlistDetailResponseDto extends WishlistResponseDto {
-  @ApiProperty({
-    description: 'Trang hiện tại của danh sách sản phẩm',
-    example: 1,
-  })
-  currentPage: number;
-
-  @ApiProperty({
-    description: 'Tổng số trang của danh sách sản phẩm',
-    example: 5,
-  })
-  totalPages: number;
-
-  @ApiProperty({
-    description: 'Tổng số sản phẩm',
-    example: 45,
-  })
-  totalItems: number;
-
-  @ApiProperty({
-    description: 'Thời gian truy vấn (timestamp)',
-    example: '2023-04-05T10:30:40.000Z',
-  })
-  timestamp: string;
-}

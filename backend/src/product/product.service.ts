@@ -42,32 +42,42 @@ export class ProductService {
   async getRecommendProducts(
     user_id: string,
   ): Promise<RecommendProductsResponseDto> {
-    const response = await axios.get(`http://127.0.0.1:5000/recommend?user_id=${user_id}`);
+    try {
+      const response = await axios.get(
+        `http://127.0.0.1:5000/recommend?user_id=${user_id}`,
+      );
 
-    if (response.status !== 200) {
-      throw new BadRequestException('Failed to fetch recommended products');
+      if (response.status !== 200) {
+        throw new BadRequestException('Failed to fetch recommended products');
+      }
+
+      const { recommendIds, popularIds } = response.data;
+
+      const [recommends, populars] = await Promise.all([
+        recommendIds.length > 0
+          ? this.prisma.product.findMany({
+              where: { id: { in: recommendIds } },
+            })
+          : Promise.resolve([]),
+
+        popularIds.length > 0
+          ? this.prisma.product.findMany({
+              where: { id: { in: popularIds } },
+            })
+          : Promise.resolve([]),
+      ]);
+
+      return {
+        recommends: this.mapProductsToResponse(recommends),
+        populars: this.mapProductsToResponse(populars),
+      };
+    } catch (error) {
+      console.error('Error fetching recommended products:', error);
     }
-
-    const { recommendIds, popularIds } = response.data;
-
-    const [recommends, populars] = await Promise.all([
-      recommendIds.length > 0
-      ? this.prisma.product.findMany({
-          where: { id: { in: recommendIds } },
-        })
-      : Promise.resolve([]),
-
-      popularIds.length > 0
-        ? this.prisma.product.findMany({
-            where: { id: { in: popularIds } },
-          })
-        : Promise.resolve([]),
-    ]);
-
     return {
-      recommends: this.mapProductsToResponse(recommends),
-      populars: this.mapProductsToResponse(populars),
-    }
+      recommends: [],
+      populars: [],
+    };
   }
 
   async createProduct(data: CreateProductDto) {
@@ -111,9 +121,7 @@ export class ProductService {
     return this.mapProductsToResponse(products);
   }
 
-  async getProducts(
-    payload: GetProductsDto,
-  ): Promise<GetProductsResponseDto> {
+  async getProducts(payload: GetProductsDto): Promise<GetProductsResponseDto> {
     const currentPage = Number(payload.currentPage) || 1;
     const pageSize = Number(payload.pageSize) || 10;
     const skip = (currentPage - 1) * pageSize;
@@ -149,24 +157,30 @@ export class ProductService {
       throw new NotFoundException('Product not found');
     }
 
-    const response = await axios.get(`http://127.0.0.1:5000/similar?product_id=${id}`);
-    if(response.status === 200){
-      const similars = await this.prisma.product.findMany({
-        where: {
-          id: {
-            in: response.data,
+    try {
+      const response = await axios.get(
+        `http://127.0.0.1:5000/similar?product_id=${id}`,
+      );
+      if (response.status === 200) {
+        const similars = await this.prisma.product.findMany({
+          where: {
+            id: {
+              in: response.data,
+            },
           },
-        },
-        include: {
-          variants: true,
-          category: true,
-        },
-      });
-      return {
-        ...this.mapProductToResponse(product),
-        reviews: product.reviews,
-        similars: similars.map(this.mapProductToResponse),
-      };
+          include: {
+            variants: true,
+            category: true,
+          },
+        });
+        return {
+          ...this.mapProductToResponse(product),
+          reviews: product.reviews,
+          similars: similars.map(this.mapProductToResponse),
+        };
+      }
+    } catch (error) {
+      console.error('Error fetching similar products:', error);
     }
 
     return {
@@ -174,8 +188,6 @@ export class ProductService {
       reviews: product.reviews,
     };
   }
-
-  
 
   async updateProduct(
     id: string,
@@ -223,40 +235,44 @@ export class ProductService {
     const currentPage = Number(payload.currentPage) || 1;
     const pageSize = Number(payload.pageSize) || 10;
     const skip = (currentPage - 1) * pageSize;
-  
+
     const query = payload.query?.trim();
     const categoryId = payload.categoryId;
-    const sort = payload?.sort;
+    const sortBy = payload?.sortBy;
+    const sortOrder = payload?.sortOrder;
     const minPrice = payload.minPrice;
     const maxPrice = payload.maxPrice;
-  
+
     const where: Prisma.ProductWhereInput = {};
-  
+
     if (query) {
-      where.OR = [
-        { name: { contains: query, mode: 'insensitive' } },
-      ];
+      where.OR = [{ name: { contains: query, mode: 'insensitive' } }];
     }
-  
+
     if (categoryId) {
       where.categoryId = categoryId;
     }
 
-    if (minPrice && maxPrice){
+    if (minPrice && maxPrice) {
       where.basePrice = {
         gte: minPrice,
+        lte: maxPrice,
+      };
+    } else if (minPrice) {
+      where.basePrice = {
+        gte: minPrice,
+      };
+    } else if (maxPrice) {
+      where.basePrice = {
         lte: maxPrice,
       };
     }
 
     let orderBy: Prisma.ProductOrderByWithRelationInput = { createdAt: 'desc' };
-    if (sort) {
-      const [field, direction] = sort.split(':');
-      if ((field === 'Price' || field === 'CreatedAt') &&(direction === 'asc' || direction === 'desc')) {
-        orderBy = {
-          [field === 'Price' ? 'basePrice' : 'createdAt']: direction,
-        } as Prisma.ProductOrderByWithRelationInput;
-      }
+    if (sortBy && sortOrder) {
+      orderBy = {
+        [sortBy === 'price' ? 'basePrice' : 'createdAt']: sortOrder,
+      } as Prisma.ProductOrderByWithRelationInput;
     }
 
     const [total, products] = await Promise.all([
@@ -269,10 +285,10 @@ export class ProductService {
           variants: true,
           category: true,
         },
-        orderBy
+        orderBy,
       }),
     ]);
-  
+
     return {
       currentPage,
       totalPages: Math.ceil(total / pageSize),
@@ -280,7 +296,7 @@ export class ProductService {
       data: this.mapProductsToResponse(products),
     };
   }
-  
+
   async compareProducts(
     productIds: string[],
     currentPage: number = 1,

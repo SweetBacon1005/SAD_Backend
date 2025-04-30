@@ -64,11 +64,11 @@ export class RecommendProductsResponseDto {
       description: 'Sản phẩm được đề xuất',
       type: [ProductResponseDto]
   })
-  recommends?: ProductResponseDto[];
+  recommends?: ProductResponseDto[] | null;
 
   @ApiProperty({
       description: 'Sản phẩm phổ biến',
       type: [ProductResponseDto]
   })
-  populars: ProductResponseDto[];
+  populars?: ProductResponseDto[] | null;
 }

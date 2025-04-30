@@ -16,7 +16,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AddWishlistItemDto } from './dto/add-wishlist-item.dto';
-import { WishlistFilterDto } from './dto/pagination-wishlist.dto';
+import { WishlistFilterDto, WishlistListResponseDto } from './dto/pagination-wishlist.dto';
 import { WishlistResponseDto } from './dto/wishlist-response.dto';
 import { WishlistService } from './wishlist.service';
 
@@ -42,6 +42,25 @@ export class WishlistController {
     const userId = req['user'].id;
     const result = await this.wishlistService.findAll(userId, filter);
     return result.data[0];
+  }
+
+  @Post("search")
+  @ApiOperation({
+    summary: 'Lấy hoặc tạo mới wishlist của người dùng hiện tại',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Wishlist đã được tìm thấy hoặc tạo mới.',
+    type: WishlistResponseDto,
+  })
+  @ApiBearerAuth()
+  async searchUserWishlist(
+    @Req() req: Request,
+    @Query() filter: WishlistFilterDto,
+  ): Promise<WishlistListResponseDto> {
+    const userId = req['user'].id;
+    const result = await this.wishlistService.search(userId, filter);
+    return result;
   }
 
   @Post('add-item')
