@@ -75,7 +75,7 @@ export class PaymentResponseDto {
   @ApiProperty({ 
     description: 'Phương thức thanh toán', 
     enum: PaymentMethod, 
-    example: PaymentMethod.CREDIT_CARD 
+    example: PaymentMethod.VNPAY 
   })
   method: PaymentMethod;
 
@@ -148,7 +148,7 @@ export class OrderResponseDto {
   @ApiProperty({ 
     description: 'Phương thức thanh toán', 
     enum: PaymentMethod, 
-    example: PaymentMethod.CREDIT_CARD 
+    example: PaymentMethod.VNPAY 
   })
   paymentMethod: PaymentMethod | null;
 

@@ -12,6 +12,7 @@ import { CartModule } from './cart/cart.module';
 import { CategoryModule } from './category/category.module';
 import { RolesGuard } from './common/guards/role.guard';
 import { PrismaModule } from './database/prisma.module';
+import { NotificationModule } from './notification/notification.module';
 import { OrderModule } from './order/order.module';
 import { PaymentModule } from './payment/payment.module';
 import { ProductModule } from './product/product.module';
@@ -36,19 +37,19 @@ config();
     }),
     PrismaModule,
     AuthModule,
-    CacheModule.register({
-      isGlobal: true,
-      ttl: 60000,
-      max: 3,
-    }),
-    ThrottlerModule.forRoot({
-      throttlers: [
-        {
-          ttl: 60000,
-          limit: 1000,
-        },
-      ],
-    }),
+    // CacheModule.register({
+    //   isGlobal: true,
+    //   ttl: 60000,
+    //   max: 3,
+    // }),
+    // ThrottlerModule.forRoot({
+    //   throttlers: [
+    //     {
+    //       ttl: 60000,
+    //       limit: 1000,
+    //     },
+    //   ],
+    // }),
     ProductModule,
     CartModule,
     OrderModule,
@@ -58,20 +59,21 @@ config();
     PaymentModule,
     CategoryModule,
     VoucherModule,
+    NotificationModule,
   ],
   providers: [
     {
       provide: APP_GUARD,
       useClass: AuthGuard,
     },
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: CacheInterceptor,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
+    // {
+    //   provide: APP_INTERCEPTOR,
+    //   useClass: CacheInterceptor,
+    // },
+    // {
+    //   provide: APP_GUARD,
+    //   useClass: ThrottlerGuard,
+    // },
     {
       provide: APP_GUARD,
       useClass: RolesGuard,

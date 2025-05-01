@@ -26,6 +26,7 @@ model User {
   cart                        Cart?
   orders                      Order[]
   reviews                     Review[]
+  notifications               Notification[]
 }
 
 enum UserRole {
@@ -168,11 +169,6 @@ enum PaymentStatus {
 enum PaymentMethod {
   VNPAY
   COD
-  CREDIT_CARD
-  DEBIT_CARD
-  PAYPAL
-  STRIPE
-  BANK_TRANSFER
 }
 
 model OrderItem {
@@ -296,4 +292,26 @@ enum VoucherApplicable {
   SPECIFIC_PRODUCTS
   SPECIFIC_USERS
   FIRST_ORDER
+}
+
+enum NotificationType {
+  ORDER_STATUS
+  PAYMENT_STATUS
+  SHIPPING_UPDATE
+  PROMOTION
+  SYSTEM
+  REVIEW_RESPONSE
+}
+
+model Notification {
+  id          String           @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String           @db.ObjectId
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  title       String
+  message     String
+  isRead      Boolean          @default(false)
+  data        Json?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime?        @updatedAt
 }

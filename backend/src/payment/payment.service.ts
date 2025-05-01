@@ -20,6 +20,8 @@ import { VnpayRefundDto } from './dto/vnpay-refund.dto';
 import { VnpayPaymentResponseDto } from './dto/vnpay-response.dto';
 import { VnpayService } from './vnpay.service';
 import { PaymentDataDto } from './dto/payment-data.dto';
+import { NotificationService } from '../notification/notification.service';
+
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
@@ -27,7 +29,43 @@ export class PaymentService {
   constructor(
     private prisma: PrismaService,
     private vnpayService: VnpayService,
+    private notificationService: NotificationService,
   ) {}
+
+  private validatePaymentMethod(paymentMethod: PaymentMethod): void {
+    if (!paymentMethod) {
+      throw new BadRequestException('Phương thức thanh toán không được để trống');
+    }
+
+    if (!Object.values(PaymentMethod).includes(paymentMethod)) {
+      throw new BadRequestException('Phương thức thanh toán không hợp lệ');
+    }
+
+    // Kiểm tra các phương thức thanh toán đang được hỗ trợ
+    const supportedPaymentMethods = [
+      PaymentMethod.COD,
+      PaymentMethod.VNPAY,
+    ];
+
+    if (!supportedPaymentMethods.includes(paymentMethod)) {
+      throw new BadRequestException(
+        `Phương thức thanh toán ${paymentMethod} chưa được hỗ trợ. Các phương thức được hỗ trợ: ${supportedPaymentMethods.join(', ')}`,
+      );
+    }
+
+    // Kiểm tra điều kiện đặc biệt cho từng phương thức thanh toán
+    if (paymentMethod === PaymentMethod.COD) {
+      // Kiểm tra giới hạn số tiền cho COD
+      const codLimit = 2000000; // 2 triệu VND
+      if (this.currentOrderTotal > codLimit) {
+        throw new BadRequestException(
+          `Phương thức thanh toán COD chỉ áp dụng cho đơn hàng có giá trị không vượt quá ${codLimit.toLocaleString('vi-VN')}đ`,
+        );
+      }
+    }
+  }
+
+  private currentOrderTotal: number = 0;
 
   async create(
     payload: CreatePaymentDto,
@@ -52,10 +90,14 @@ export class PaymentService {
     }
 
     const paymentAmount = order.total;
+    this.currentOrderTotal = paymentAmount;
     
     if (paymentAmount <= 0) {
       throw new BadRequestException('Số tiền thanh toán không hợp lệ');
     }
+
+    // Validate payment method
+    this.validatePaymentMethod(payload.paymentMethod);
 
     const paymentData = {
       orderId: order.id,
@@ -68,6 +110,7 @@ export class PaymentService {
     let payment = await this.createOrUpdatePayment(paymentData);
     let paymentResponse: PaymentResponseDto = this.mapToPaymentResponseDto(payment);
 
+    // Chỉ tạo mã VNPAY nếu phương thức thanh toán là VNPAY
     if (payload.paymentMethod === PaymentMethod.VNPAY) {
       const paymentUrl = await this.vnpayService.createPaymentUrl({
         orderId: order.id,
@@ -89,12 +132,42 @@ export class PaymentService {
 
       await this.createTransaction(transactionData);
       paymentResponse.paymentUrl = paymentUrl;
+    } else if (payload.paymentMethod === PaymentMethod.COD) {
+      // Tạo transaction cho COD
+      const transactionData: CreatePaymentTransactionDto = {
+        paymentId: payment.id,
+        transactionId: `COD_${Date.now()}`,
+        status: TransactionStatus.PENDING,
+        amount: paymentAmount,
+        paymentMethod: PaymentMethod.COD,
+        provider: 'COD',
+        providerData: {
+          status: 'PENDING',
+          note: 'Chờ xác nhận đơn hàng',
+        },
+      };
+
+      await this.createTransaction(transactionData);
     }
 
     await this.prisma.order.update({
       where: { id: order.id },
       data: {
         paymentMethod: payload.paymentMethod,
+      },
+    });
+
+    // Tạo thông báo khi tạo thanh toán mới
+    await this.notificationService.createNotification({
+      userId: order.userId,
+      type: 'PAYMENT_STATUS',
+      title: 'Tạo thanh toán mới',
+      message: `Đơn hàng #${order.id} đã được tạo thanh toán với số tiền ${paymentAmount.toLocaleString('vi-VN')}đ${payload.paymentMethod === PaymentMethod.COD ? ' (Thanh toán khi nhận hàng)' : ''}`,
+      data: { 
+        orderId: order.id,
+        paymentId: payment.id,
+        amount: paymentAmount,
+        paymentMethod: payload.paymentMethod
       },
     });
 
@@ -148,9 +221,36 @@ export class PaymentService {
           paymentStatus: PaymentStatus.PAID,
         },
       });
+
+      // Tạo thông báo khi thanh toán thành công
+      await this.notificationService.createNotification({
+        userId: order.userId,
+        type: 'PAYMENT_STATUS',
+        title: 'Thanh toán thành công',
+        message: `Đơn hàng #${orderId} đã được thanh toán thành công qua VNPAY`,
+        data: { 
+          orderId,
+          paymentId: order.payment?.id,
+          amount: order.payment?.amount,
+          transactionId: vnpayResponse.transactionId
+        },
+      });
     } else {
       paymentStatus = PaymentStatus.FAILED;
       transactionStatus = TransactionStatus.FAILED;
+
+      // Tạo thông báo khi thanh toán thất bại
+      await this.notificationService.createNotification({
+        userId: order.userId,
+        type: 'PAYMENT_STATUS',
+        title: 'Thanh toán thất bại',
+        message: `Đơn hàng #${orderId} thanh toán thất bại: ${vnpayResponse.message}`,
+        data: { 
+          orderId,
+          paymentId: order.payment?.id,
+          error: vnpayResponse.message
+        },
+      });
     }
 
     const payment = await this.prisma.payment.update({
@@ -318,6 +418,20 @@ export class PaymentService {
         where: { orderId: refundDto.orderId },
         data: {
           status: PaymentStatus.REFUNDED,
+        },
+      });
+
+      // Tạo thông báo khi hoàn tiền thành công
+      await this.notificationService.createNotification({
+        userId: order.userId,
+        type: 'PAYMENT_STATUS',
+        title: 'Hoàn tiền thành công',
+        message: `Đơn hàng #${refundDto.orderId} đã được hoàn tiền ${refundDto.amount.toLocaleString('vi-VN')}đ`,
+        data: { 
+          orderId: refundDto.orderId,
+          paymentId: order.payment?.id,
+          amount: refundDto.amount,
+          reason: refundDto.reason
         },
       });
 

@@ -104,7 +104,7 @@ export class CreateOrderDto {
   @ApiProperty({
     description: 'Phương thức thanh toán',
     enum: PaymentMethod,
-    example: PaymentMethod.CREDIT_CARD,
+    example: PaymentMethod.VNPAY,
   })
   @IsEnum(PaymentMethod)
   paymentMethod: PaymentMethod;

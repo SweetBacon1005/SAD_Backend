@@ -13,10 +13,13 @@ import {
 } from './dto/pagination-review.dto';
 import { ReviewResponseDto } from './dto/review-response.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class ReviewService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+  ) {}
 
   async create(
     userId: string,
