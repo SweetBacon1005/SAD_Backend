@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus, PaymentStatus, TransactionStatus } from '@prisma/client';
+import { OrderStatus, PaymentMethod, PaymentStatus, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { VoucherService } from '../voucher/voucher.service';
 import {
@@ -14,6 +14,7 @@ import {
 } from './dto/order-response.dto';
 import { CreateOrderDto } from './dto/order.dto';
 import { PagedResponseDto, PaginationDto } from './dto/pagination.dto';
+import { NotificationService } from '../notification/notification.service';
 
 interface ProductVariant {
   id: string;
@@ -38,7 +39,30 @@ export class OrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly voucherService: VoucherService,
+    private readonly notificationService: NotificationService,
   ) {}
+
+  private validatePaymentMethod(paymentMethod: PaymentMethod): void {
+    if (!paymentMethod) {
+      throw new BadRequestException('Phương thức thanh toán không được để trống');
+    }
+
+    if (!Object.values(PaymentMethod).includes(paymentMethod)) {
+      throw new BadRequestException('Phương thức thanh toán không hợp lệ');
+    }
+
+    // Kiểm tra các phương thức thanh toán đang được hỗ trợ
+    const supportedPaymentMethods = [
+      PaymentMethod.COD,
+      PaymentMethod.VNPAY,
+    ];
+
+    if (!supportedPaymentMethods.includes(paymentMethod)) {
+      throw new BadRequestException(
+        `Phương thức thanh toán ${paymentMethod} chưa được hỗ trợ. Các phương thức được hỗ trợ: ${supportedPaymentMethods.join(', ')}`,
+      );
+    }
+  }
 
   async checkVoucher(
     userId: string,
@@ -78,6 +102,9 @@ export class OrderService {
     userId: string,
     payload: CreateOrderDto,
   ): Promise<OrderResponseDto> {
+    // Validate payment method
+    this.validatePaymentMethod(payload.paymentMethod);
+
     return this.prisma.$transaction(async (prisma) => {
       const cart = await prisma.cart.findUnique({
         where: { userId },
@@ -368,6 +395,19 @@ export class OrderService {
         });
       }
 
+      // Tạo thông báo khi tạo đơn hàng mới
+      await this.notificationService.createNotification({
+        userId,
+        type: 'ORDER_STATUS',
+        title: 'Đơn hàng mới',
+        message: `Đơn hàng #${order.id} đã được tạo thành công với tổng giá trị ${total.toLocaleString('vi-VN')}đ`,
+        data: { 
+          orderId: order.id,
+          total,
+          status: order.status
+        },
+      });
+
       return order as unknown as OrderResponseDto;
     });
   }
@@ -493,6 +533,7 @@ export class OrderService {
       where: { id },
       include: {
         items: true,
+        user: true,
       },
     });
 
@@ -532,6 +573,19 @@ export class OrderService {
     const updatedOrder = await this.prisma.order.update({
       where: { id },
       data: updateData,
+    });
+
+    // Tạo thông báo khi cập nhật trạng thái đơn hàng
+    await this.notificationService.createNotification({
+      userId: order.userId,
+      type: 'ORDER_STATUS',
+      title: 'Cập nhật đơn hàng',
+      message: `Đơn hàng #${order.id} đã được cập nhật trạng thái: ${status}`,
+      data: { 
+        orderId: order.id,
+        status,
+        previousStatus: order.status
+      },
     });
 
     return {
@@ -614,6 +668,7 @@ export class OrderService {
         where: { id },
         include: {
           items: true,
+          user: true,
         },
       });
 
@@ -628,6 +683,18 @@ export class OrderService {
       const updatedOrder = await prisma.order.update({
         where: { id },
         data: { status: OrderStatus.CANCELLED },
+      });
+
+      // Tạo thông báo khi hủy đơn hàng
+      await this.notificationService.createNotification({
+        userId: order.userId,
+        type: 'ORDER_STATUS',
+        title: 'Đơn hàng bị hủy',
+        message: `Đơn hàng #${order.id} đã bị hủy`,
+        data: { 
+          orderId: order.id,
+          previousStatus: order.status
+        },
       });
 
       if (order.voucherId) {
