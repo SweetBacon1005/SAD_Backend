@@ -3,8 +3,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus, PaymentMethod, PaymentStatus, TransactionStatus } from '@prisma/client';
+import {
+  OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
+  TransactionStatus,
+} from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 import { VoucherService } from '../voucher/voucher.service';
 import {
   CancelOrderResponseDto,
@@ -14,7 +20,6 @@ import {
 } from './dto/order-response.dto';
 import { CreateOrderDto } from './dto/order.dto';
 import { PagedResponseDto, PaginationDto } from './dto/pagination.dto';
-import { NotificationService } from '../notification/notification.service';
 
 interface ProductVariant {
   id: string;
@@ -44,7 +49,9 @@ export class OrderService {
 
   private validatePaymentMethod(paymentMethod: PaymentMethod): void {
     if (!paymentMethod) {
-      throw new BadRequestException('Phương thức thanh toán không được để trống');
+      throw new BadRequestException(
+        'Phương thức thanh toán không được để trống',
+      );
     }
 
     if (!Object.values(PaymentMethod).includes(paymentMethod)) {
@@ -52,10 +59,7 @@ export class OrderService {
     }
 
     // Kiểm tra các phương thức thanh toán đang được hỗ trợ
-    const supportedPaymentMethods = [
-      PaymentMethod.COD,
-      PaymentMethod.VNPAY,
-    ];
+    const supportedPaymentMethods = [PaymentMethod.COD, PaymentMethod.VNPAY];
 
     if (!supportedPaymentMethods.includes(paymentMethod)) {
       throw new BadRequestException(
@@ -170,9 +174,13 @@ export class OrderService {
               requestedQty: item.quantity,
               selectedVariant,
             };
-          }
-          // Trường hợp 2: Chỉ có productId và variantId (tùy chọn)
-          else {
+          } else if (!item.productId && !item.variantId) {
+            throw new BadRequestException(
+              'Cần cung cấp productId hoặc cartItemId để tạo đơn hàng',
+            );
+          } else {
+            // Trường hợp 2: Chỉ có productId và variantId (tùy chọn)
+
             const product = await prisma.product.findUnique({
               where: { id: item.productId },
               include: { variants: true },
@@ -186,7 +194,8 @@ export class OrderService {
 
             let selectedVariant: ProductVariant | null = null;
             if (item.variantId) {
-              selectedVariant = product.variants.find((v) => v.id === item.variantId) || null;
+              selectedVariant =
+                product.variants.find((v) => v.id === item.variantId) || null;
 
               if (!selectedVariant) {
                 throw new NotFoundException(
@@ -401,10 +410,10 @@ export class OrderService {
         type: 'ORDER_STATUS',
         title: 'Đơn hàng mới',
         message: `Đơn hàng #${order.id} đã được tạo thành công với tổng giá trị ${total.toLocaleString('vi-VN')}đ`,
-        data: { 
+        data: {
           orderId: order.id,
           total,
-          status: order.status
+          status: order.status,
         },
       });
 
@@ -581,10 +590,10 @@ export class OrderService {
       type: 'ORDER_STATUS',
       title: 'Cập nhật đơn hàng',
       message: `Đơn hàng #${order.id} đã được cập nhật trạng thái: ${status}`,
-      data: { 
+      data: {
         orderId: order.id,
         status,
-        previousStatus: order.status
+        previousStatus: order.status,
       },
     });
 
@@ -618,9 +627,9 @@ export class OrderService {
 
     const updatedOrder = await this.prisma.order.update({
       where: { id },
-      data: { 
+      data: {
         paymentStatus: status,
-        status: orderStatus
+        status: orderStatus,
       },
     });
 
@@ -691,9 +700,9 @@ export class OrderService {
         type: 'ORDER_STATUS',
         title: 'Đơn hàng bị hủy',
         message: `Đơn hàng #${order.id} đã bị hủy`,
-        data: { 
+        data: {
           orderId: order.id,
-          previousStatus: order.status
+          previousStatus: order.status,
         },
       });
 
@@ -701,7 +710,7 @@ export class OrderService {
         const voucher = await prisma.voucher.findUnique({
           where: { id: order.voucherId },
         });
-        
+
         if (voucher && voucher.usageCount > 0) {
           await prisma.voucher.update({
             where: { id: order.voucherId },
