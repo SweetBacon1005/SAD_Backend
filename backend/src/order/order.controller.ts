@@ -11,7 +11,6 @@ import {
   Query,
   Req,
   Request,
-  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -25,9 +24,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { OrderStatus, PaymentStatus, UserRole } from '@prisma/client';
-import { AuthGuard } from '../auth/guard/auth.guard';
 import { Roles } from '../common/decorators/role.decorator';
-import { RolesGuard } from '../common/guards/role.guard';
 import {
   CancelOrderResponseDto,
   OrderResponseDto,
@@ -221,7 +218,6 @@ export class OrderController {
   }
 
   @Put(':id/status')
-  @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Cập nhật trạng thái đơn hàng (Admin)' })
   @ApiParam({ name: 'id', description: 'ID đơn hàng' })
@@ -241,7 +237,6 @@ export class OrderController {
   }
 
   @Put(':id/payment')
-  @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Cập nhật trạng thái thanh toán (Admin)' })
   @ApiParam({ name: 'id', description: 'ID đơn hàng' })
