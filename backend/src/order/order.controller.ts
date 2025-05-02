@@ -75,7 +75,6 @@ export class OrderController {
   }
 
   @Get('my-orders')
-  @UseGuards(AuthGuard)
   @ApiOperation({
     summary: 'Lấy danh sách đơn hàng của người dùng (có phân trang)',
   })
@@ -104,7 +103,6 @@ export class OrderController {
   }
 
   @Get(':id')
-  @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Lấy thông tin đơn hàng theo ID' })
   @ApiParam({ name: 'id', description: 'ID đơn hàng' })
   @ApiOkResponse({
@@ -170,13 +168,13 @@ export class OrderController {
       properties: {
         isValid: { type: 'boolean' },
         message: { type: 'string' },
-        voucher: { 
+        voucher: {
           type: 'object',
-          nullable: true 
+          nullable: true,
         },
-        discountAmount: { 
+        discountAmount: {
           type: 'number',
-          nullable: true 
+          nullable: true,
         },
       },
     },
@@ -204,7 +202,6 @@ export class OrderController {
   }
 
   @Post('from-cart')
-  @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Tạo đơn hàng từ giỏ hàng' })
   @ApiCreatedResponse({
     description: 'Đơn hàng đã được tạo thành công từ giỏ hàng',
