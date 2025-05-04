@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  IsBoolean,
   IsEnum,
   IsNumber,
   IsOptional,
@@ -101,32 +100,3 @@ export class WishlistFilterDto {
   @Type(() => Number)
   pageSize?: number;
 }
-
-export class WishlistListResponseDto {
-  @ApiProperty({
-    description: 'Danh sách yêu thích',
-    type: [WishlistResponseDto],
-  })
-  data: WishlistResponseDto[];
-
-  @ApiProperty({
-    description: 'Trang hiện tại',
-    example: 1,
-  })
-  currentPage: number;
-
-  @ApiProperty({
-    description: 'Tổng số trang',
-    example: 5,
-  })
-  totalPages: number;
-
-  @ApiProperty({
-    description: 'Tổng số kết quả',
-    example: 45,
-  })
-  total: number;
-}
-
-
-

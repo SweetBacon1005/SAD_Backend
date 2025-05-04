@@ -22,20 +22,6 @@ class ProductDto {
   images: string[];
 }
 
-export class WishlistItemResponseDto {
-  @ApiProperty({ description: 'ID của mục yêu thích', example: '6151f3d2e149e32b3404c8b5' })
-  id: string;
-
-  @ApiProperty({ description: 'Thông tin sản phẩm', type: ProductDto })
-  product: ProductDto;
-
-  @ApiPropertyOptional({ description: 'Ghi chú', example: 'Màu đen, Size M' })
-  note?: string;
-
-  @ApiProperty({ description: 'Ngày thêm vào', example: '2023-04-01T10:30:40.000Z' })
-  addedAt: Date;
-}
-
 export class WishlistResponseDto {
   @ApiProperty({ description: 'ID danh sách yêu thích', example: '6151f3d2e149e32b3404c8b5' })
   id: string;
@@ -43,8 +29,8 @@ export class WishlistResponseDto {
   @ApiProperty({ description: 'Thông tin người dùng sở hữu', type: UserDto })
   user: UserDto;
 
-  @ApiProperty({ description: 'Danh sách các mục yêu thích', type: [WishlistItemResponseDto] })
-  items: WishlistItemResponseDto[];
+  @ApiProperty({ description: 'Thông tin sản phẩm', type: ProductDto })
+  product: ProductDto;
 
   @ApiProperty({ description: 'Ngày tạo', example: '2023-04-01T10:30:40.000Z' })
   createdAt: Date;

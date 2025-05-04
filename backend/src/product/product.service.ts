@@ -253,6 +253,12 @@ export class ProductService {
       where.categoryId = categoryId;
     }
 
+    if(minPrice && maxPrice && minPrice > maxPrice) {
+      throw new BadRequestException(
+        'Giá tối thiểu không được lớn hơn giá tối đa',
+      );
+    }
+    
     if (minPrice && maxPrice) {
       where.basePrice = {
         gte: minPrice,
