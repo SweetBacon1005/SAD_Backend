@@ -10,8 +10,10 @@ import {
   TransactionStatus,
 } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { HandleVnpayReturnDto } from './dto/handle-vnpay-return.dto';
+import { PaymentDataDto } from './dto/payment-data.dto';
 import { PaymentResponseDto } from './dto/payment-response.dto';
 import { CreatePaymentTransactionDto } from './dto/payment-transaction.dto';
 import { VnpayIpnDto } from './dto/vnpay-ipn.dto';
@@ -19,8 +21,6 @@ import { VnpayQueryDrDto } from './dto/vnpay-query-dr.dto';
 import { VnpayRefundDto } from './dto/vnpay-refund.dto';
 import { VnpayPaymentResponseDto } from './dto/vnpay-response.dto';
 import { VnpayService } from './vnpay.service';
-import { PaymentDataDto } from './dto/payment-data.dto';
-import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class PaymentService {
@@ -34,7 +34,9 @@ export class PaymentService {
 
   private validatePaymentMethod(paymentMethod: PaymentMethod): void {
     if (!paymentMethod) {
-      throw new BadRequestException('Phương thức thanh toán không được để trống');
+      throw new BadRequestException(
+        'Phương thức thanh toán không được để trống',
+      );
     }
 
     if (!Object.values(PaymentMethod).includes(paymentMethod)) {
@@ -42,10 +44,7 @@ export class PaymentService {
     }
 
     // Kiểm tra các phương thức thanh toán đang được hỗ trợ
-    const supportedPaymentMethods = [
-      PaymentMethod.COD,
-      PaymentMethod.VNPAY,
-    ];
+    const supportedPaymentMethods = [PaymentMethod.COD, PaymentMethod.VNPAY];
 
     if (!supportedPaymentMethods.includes(paymentMethod)) {
       throw new BadRequestException(
@@ -81,17 +80,23 @@ export class PaymentService {
     }
 
     if (userId && order.userId !== userId) {
-      this.logger.error(`Người dùng ${userId} không có quyền thanh toán đơn hàng ${order.id}`);
-      throw new BadRequestException('Bạn không có quyền thanh toán đơn hàng này');
+      this.logger.error(
+        `Người dùng ${userId} không có quyền thanh toán đơn hàng ${order.id}`,
+      );
+      throw new BadRequestException(
+        'Bạn không có quyền thanh toán đơn hàng này',
+      );
     }
 
     if (order.paymentStatus === PaymentStatus.PAID) {
-      throw new BadRequestException('Đơn hàng này đã được thanh toán thành công');
+      throw new BadRequestException(
+        'Đơn hàng này đã được thanh toán thành công',
+      );
     }
 
     const paymentAmount = order.total;
     this.currentOrderTotal = paymentAmount;
-    
+
     if (paymentAmount <= 0) {
       throw new BadRequestException('Số tiền thanh toán không hợp lệ');
     }
@@ -108,7 +113,8 @@ export class PaymentService {
     };
 
     let payment = await this.createOrUpdatePayment(paymentData);
-    let paymentResponse: PaymentResponseDto = this.mapToPaymentResponseDto(payment);
+    let paymentResponse: PaymentResponseDto =
+      this.mapToPaymentResponseDto(payment);
 
     // Chỉ tạo mã VNPAY nếu phương thức thanh toán là VNPAY
     if (payload.paymentMethod === PaymentMethod.VNPAY) {
@@ -163,15 +169,13 @@ export class PaymentService {
       type: 'PAYMENT_STATUS',
       title: 'Tạo thanh toán mới',
       message: `Đơn hàng #${order.id} đã được tạo thanh toán với số tiền ${paymentAmount.toLocaleString('vi-VN')}đ${payload.paymentMethod === PaymentMethod.COD ? ' (Thanh toán khi nhận hàng)' : ''}`,
-      data: { 
+      data: {
         orderId: order.id,
         paymentId: payment.id,
         amount: paymentAmount,
-        paymentMethod: payload.paymentMethod
+        paymentMethod: payload.paymentMethod,
       },
     });
-
-    this.logger.log(`Tạo thanh toán mới cho đơn hàng ${order.id} với số tiền ${paymentAmount}`);
     return paymentResponse;
   }
 
@@ -228,11 +232,11 @@ export class PaymentService {
         type: 'PAYMENT_STATUS',
         title: 'Thanh toán thành công',
         message: `Đơn hàng #${orderId} đã được thanh toán thành công qua VNPAY`,
-        data: { 
+        data: {
           orderId,
           paymentId: order.payment?.id,
           amount: order.payment?.amount,
-          transactionId: vnpayResponse.transactionId
+          transactionId: vnpayResponse.transactionId,
         },
       });
     } else {
@@ -245,10 +249,10 @@ export class PaymentService {
         type: 'PAYMENT_STATUS',
         title: 'Thanh toán thất bại',
         message: `Đơn hàng #${orderId} thanh toán thất bại: ${vnpayResponse.message}`,
-        data: { 
+        data: {
           orderId,
           paymentId: order.payment?.id,
-          error: vnpayResponse.message
+          error: vnpayResponse.message,
         },
       });
     }
@@ -427,11 +431,11 @@ export class PaymentService {
         type: 'PAYMENT_STATUS',
         title: 'Hoàn tiền thành công',
         message: `Đơn hàng #${refundDto.orderId} đã được hoàn tiền ${refundDto.amount.toLocaleString('vi-VN')}đ`,
-        data: { 
+        data: {
           orderId: refundDto.orderId,
           paymentId: order.payment?.id,
           amount: refundDto.amount,
-          reason: refundDto.reason
+          reason: refundDto.reason,
         },
       });
 
@@ -528,7 +532,7 @@ export class PaymentService {
 
     const paymentResponse = this.mapToPaymentResponseDto(payment);
     paymentResponse.orderInfo = orderInfo || '';
-    
+
     return paymentResponse;
   }
 
