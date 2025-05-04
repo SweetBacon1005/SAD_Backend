@@ -55,7 +55,7 @@ export class VnpayService {
 
     const amount = createPaymentDto.amount;
     const orderInfo =
-      createPaymentDto.orderInfo || `Thanh toan don hang :${orderId}`;
+      createPaymentDto.orderInfo || `Thanh toán đơn hàng #${orderId}`;
     const orderType = createPaymentDto.orderType || 'other';
     const locale = createPaymentDto.locale || 'vn';
     const bankCode = createPaymentDto.bankCode || '';

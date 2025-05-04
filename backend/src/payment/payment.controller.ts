@@ -6,6 +6,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -102,24 +103,9 @@ export class PaymentController {
   // API XỬ LÝ WEBHOOKS VNPAY
   // -----------------------------------------
 
-  @Get('vnpay-return')
+  @Patch('vnpay-return')
   @Public()
   @ApiOperation({ summary: 'Xử lý callback từ VNPay' })
-  @ApiQuery({
-    name: 'vnp_Amount',
-    required: true,
-    description: 'Số tiền thanh toán (VND x100)',
-  })
-  @ApiQuery({
-    name: 'vnp_TxnRef',
-    required: true,
-    description: 'Mã đơn hàng (tham chiếu)',
-  })
-  @ApiQuery({
-    name: 'vnp_ResponseCode',
-    required: true,
-    description: 'Mã phản hồi kết quả thanh toán',
-  })
   @ApiResponse({
     status: 200,
     description: 'Xử lý callback thành công',
@@ -130,7 +116,7 @@ export class PaymentController {
     description: 'Dữ liệu callback không hợp lệ',
   })
   handleVnpayReturn(
-    @Query() query: HandleVnpayReturnDto,
+    @Body() query: HandleVnpayReturnDto,
   ): Promise<VnpayPaymentResponseDto> {
     if (!query.vnp_TxnRef || !query.vnp_Amount) {
       throw new BadRequestException(
@@ -165,92 +151,92 @@ export class PaymentController {
     return this.paymentService.findOne(id);
   }
 
-  @Post('vnpay-ipn')
-  @Public()
-  @ApiOperation({
-    summary: 'Xử lý IPN (Instant Payment Notification) từ VNPay',
-  })
-  @ApiBody({
-    type: VnpayIpnDto,
-    description: 'Dữ liệu IPN từ VNPay',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Xử lý IPN thành công',
-    type: VnpayPaymentResponseDto,
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Dữ liệu IPN không hợp lệ',
-  })
-  async handleVnpayIpn(
-    @Body() body: VnpayIpnDto,
-  ): Promise<VnpayPaymentResponseDto> {
-    if (!body.vnp_TxnRef || !body.vnp_SecureHash) {
-      throw new BadRequestException(
-        'Thiếu thông tin cần thiết trong dữ liệu IPN',
-      );
-    }
-    return this.paymentService.handleVnpayIpn(body);
-  }
+  // @Post('vnpay-ipn')
+  // @Public()
+  // @ApiOperation({
+  //   summary: 'Xử lý IPN (Instant Payment Notification) từ VNPay',
+  // })
+  // @ApiBody({
+  //   type: VnpayIpnDto,
+  //   description: 'Dữ liệu IPN từ VNPay',
+  // })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Xử lý IPN thành công',
+  //   type: VnpayPaymentResponseDto,
+  // })
+  // @ApiResponse({
+  //   status: 400,
+  //   description: 'Dữ liệu IPN không hợp lệ',
+  // })
+  // async handleVnpayIpn(
+  //   @Body() body: VnpayIpnDto,
+  // ): Promise<VnpayPaymentResponseDto> {
+  //   if (!body.vnp_TxnRef || !body.vnp_SecureHash) {
+  //     throw new BadRequestException(
+  //       'Thiếu thông tin cần thiết trong dữ liệu IPN',
+  //     );
+  //   }
+  //   return this.paymentService.handleVnpayIpn(body);
+  // } 
 
-  // -----------------------------------------
-  // API QUẢN LÝ THANH TOÁN (ADMIN/MANAGER)
-  // -----------------------------------------
+  // // -----------------------------------------
+  // // API QUẢN LÝ THANH TOÁN (ADMIN/MANAGER)
+  // // -----------------------------------------
 
-  @Post('vnpay-query-dr')
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Truy vấn kết quả giao dịch VNPay' })
-  @ApiBody({
-    type: VnpayQueryDrDto,
-    description: 'Thông tin truy vấn giao dịch',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Truy vấn giao dịch thành công',
-    type: VnpayPaymentResponseDto,
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Dữ liệu truy vấn không hợp lệ',
-  })
-  async queryVnpayDr(
-    @Body() queryDrDto: VnpayQueryDrDto,
-  ): Promise<VnpayPaymentResponseDto> {
-    if (!queryDrDto.orderId) {
-      throw new BadRequestException('Thiếu mã đơn hàng cần truy vấn');
-    }
-    return this.paymentService.queryVnpayDr(queryDrDto);
-  }
+  // @Post('vnpay-query-dr')
+  // @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  // @ApiOperation({ summary: 'Truy vấn kết quả giao dịch VNPay' })
+  // @ApiBody({
+  //   type: VnpayQueryDrDto,
+  //   description: 'Thông tin truy vấn giao dịch',
+  // })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Truy vấn giao dịch thành công',
+  //   type: VnpayPaymentResponseDto,
+  // })
+  // @ApiResponse({
+  //   status: 400,
+  //   description: 'Dữ liệu truy vấn không hợp lệ',
+  // })
+  // async queryVnpayDr(
+  //   @Body() queryDrDto: VnpayQueryDrDto,
+  // ): Promise<VnpayPaymentResponseDto> {
+  //   if (!queryDrDto.orderId) {
+  //     throw new BadRequestException('Thiếu mã đơn hàng cần truy vấn');
+  //   }
+  //   return this.paymentService.queryVnpayDr(queryDrDto);
+  // }
 
-  @Post('vnpay-refund')
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Hoàn tiền giao dịch VNPay' })
-  @ApiBody({
-    type: VnpayRefundDto,
-    description: 'Thông tin hoàn tiền',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Yêu cầu hoàn tiền thành công',
-    type: VnpayPaymentResponseDto,
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Dữ liệu hoàn tiền không hợp lệ',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Không tìm thấy đơn hàng',
-  })
-  async refundVnpay(
-    @Body() refundDto: VnpayRefundDto,
-  ): Promise<VnpayPaymentResponseDto> {
-    if (!refundDto.orderId || !refundDto.amount) {
-      throw new BadRequestException(
-        'Thiếu thông tin cần thiết cho yêu cầu hoàn tiền',
-      );
-    }
-    return this.paymentService.refundVnpay(refundDto);
-  }
+  // @Post('vnpay-refund')
+  // @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  // @ApiOperation({ summary: 'Hoàn tiền giao dịch VNPay' })
+  // @ApiBody({
+  //   type: VnpayRefundDto,
+  //   description: 'Thông tin hoàn tiền',
+  // })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Yêu cầu hoàn tiền thành công',
+  //   type: VnpayPaymentResponseDto,
+  // })
+  // @ApiResponse({
+  //   status: 400,
+  //   description: 'Dữ liệu hoàn tiền không hợp lệ',
+  // })
+  // @ApiResponse({
+  //   status: 404,
+  //   description: 'Không tìm thấy đơn hàng',
+  // })
+  // async refundVnpay(
+  //   @Body() refundDto: VnpayRefundDto,
+  // ): Promise<VnpayPaymentResponseDto> {
+  //   if (!refundDto.orderId || !refundDto.amount) {
+  //     throw new BadRequestException(
+  //       'Thiếu thông tin cần thiết cho yêu cầu hoàn tiền',
+  //     );
+  //   }
+  //   return this.paymentService.refundVnpay(refundDto);
+  // }
 }
