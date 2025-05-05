@@ -257,14 +257,14 @@ export class PaymentService {
 
     let paymentStatus: PaymentStatus = PaymentStatus.PENDING;
     let transactionStatus: TransactionStatus = TransactionStatus.PENDING;
-    const errorMessage = this.getVnpayErrorMessage(vnpayResponse.responseCode);
+    let errorMessage = this.getVnpayErrorMessage(vnpayResponse.responseCode);
 
-    if (vnpayResponse.isSuccess) {
-      if (!vnpayResponse.isValidSignature) {
-        this.logger.error('Chữ ký VNPay không hợp lệ cho giao dịch thành công');
-        throw new BadRequestException('Chữ ký không hợp lệ');
-      }
-
+    if (!vnpayResponse.isValidSignature) {
+      this.logger.error('Chữ ký VNPay không hợp lệ');
+      paymentStatus = PaymentStatus.FAILED;
+      transactionStatus = TransactionStatus.FAILED;
+      errorMessage = 'Chữ ký không hợp lệ';
+    } else if (vnpayResponse.isSuccess) {
       paymentStatus = PaymentStatus.PAID;
       transactionStatus = TransactionStatus.SUCCESS;
 
@@ -324,6 +324,7 @@ export class PaymentService {
             payDate: vnpayResponse.payDate,
             responseCode: vnpayResponse.responseCode,
             errorMessage: errorMessage,
+            isValidSignature: vnpayResponse.isValidSignature,
           },
           errorMessage:
             transactionStatus === TransactionStatus.FAILED
