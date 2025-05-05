@@ -1,3 +1,4 @@
+import { FRONTEND_URL } from '@/common/constants';
 import {
   BadRequestException,
   Injectable,
@@ -10,27 +11,28 @@ import {
   TransactionStatus,
 } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
-import { NotificationService } from '../notification/notification.service';
+import { NotificationGateway } from '../notification/notification.gateway';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { HandleVnpayReturnDto } from './dto/handle-vnpay-return.dto';
 import { PaymentDataDto } from './dto/payment-data.dto';
 import { PaymentResponseDto } from './dto/payment-response.dto';
 import { CreatePaymentTransactionDto } from './dto/payment-transaction.dto';
 import { VnpayIpnDto } from './dto/vnpay-ipn.dto';
-import { VnpayQueryDrDto } from './dto/vnpay-query-dr.dto';
-import { VnpayRefundDto } from './dto/vnpay-refund.dto';
 import { VnpayPaymentResponseDto } from './dto/vnpay-response.dto';
 import { VnpayService } from './vnpay.service';
 
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
+  private FRONTEND_URL: string;
 
   constructor(
     private prisma: PrismaService,
     private vnpayService: VnpayService,
-    private notificationService: NotificationService,
-  ) {}
+    private notificationGateway: NotificationGateway,
+  ) {
+    this.FRONTEND_URL = FRONTEND_URL;
+  }
 
   private validatePaymentMethod(paymentMethod: PaymentMethod): void {
     if (!paymentMethod) {
@@ -55,7 +57,7 @@ export class PaymentService {
     // Kiểm tra điều kiện đặc biệt cho từng phương thức thanh toán
     if (paymentMethod === PaymentMethod.COD) {
       // Kiểm tra giới hạn số tiền cho COD
-      const codLimit = 2000000; // 2 triệu VND
+      const codLimit = 100000000; // 100 triệu VND
       if (this.currentOrderTotal > codLimit) {
         throw new BadRequestException(
           `Phương thức thanh toán COD chỉ áp dụng cho đơn hàng có giá trị không vượt quá ${codLimit.toLocaleString('vi-VN')}đ`,
@@ -164,8 +166,7 @@ export class PaymentService {
     });
 
     // Tạo thông báo khi tạo thanh toán mới
-    await this.notificationService.createNotification({
-      userId: order.userId,
+    await this.notificationGateway.sendNotification(order.userId, {
       type: 'PAYMENT_STATUS',
       title: 'Tạo thanh toán mới',
       message: `Đơn hàng #${order.id} đã được tạo thanh toán với số tiền ${paymentAmount.toLocaleString('vi-VN')}đ${payload.paymentMethod === PaymentMethod.COD ? ' (Thanh toán khi nhận hàng)' : ''}`,
@@ -227,8 +228,7 @@ export class PaymentService {
       });
 
       // Tạo thông báo khi thanh toán thành công
-      await this.notificationService.createNotification({
-        userId: order.userId,
+      await this.notificationGateway.sendNotification(order.userId, {
         type: 'PAYMENT_STATUS',
         title: 'Thanh toán thành công',
         message: `Đơn hàng #${orderId} đã được thanh toán thành công qua VNPAY`,
@@ -244,8 +244,7 @@ export class PaymentService {
       transactionStatus = TransactionStatus.FAILED;
 
       // Tạo thông báo khi thanh toán thất bại
-      await this.notificationService.createNotification({
-        userId: order.userId,
+      await this.notificationGateway.sendNotification(order.userId, {
         type: 'PAYMENT_STATUS',
         title: 'Thanh toán thất bại',
         message: `Đơn hàng #${orderId} thanh toán thất bại: ${vnpayResponse.message}`,
@@ -367,96 +366,96 @@ export class PaymentService {
     return vnpayResponse;
   }
 
-  async queryVnpayDr(
-    queryDrDto: VnpayQueryDrDto,
-  ): Promise<VnpayPaymentResponseDto> {
-    const vnpayResponse = await this.vnpayService.queryDr(queryDrDto);
+  // async queryVnpayDr(
+  //   queryDrDto: VnpayQueryDrDto,
+  // ): Promise<VnpayPaymentResponseDto> {
+  //   const vnpayResponse = await this.vnpayService.queryDr(queryDrDto);
 
-    if (!vnpayResponse.isValidSignature) {
-      this.logger.error('Chữ ký VNPay không hợp lệ');
-      throw new BadRequestException('Chữ ký không hợp lệ');
-    }
+  //   if (!vnpayResponse.isValidSignature) {
+  //     this.logger.error('Chữ ký VNPay không hợp lệ');
+  //     throw new BadRequestException('Chữ ký không hợp lệ');
+  //   }
 
-    return vnpayResponse;
-  }
+  //   return vnpayResponse;
+  // }
 
-  async refundVnpay(
-    refundDto: VnpayRefundDto,
-  ): Promise<VnpayPaymentResponseDto> {
-    const order = await this.prisma.order.findUnique({
-      where: { id: refundDto.orderId },
-      include: {
-        payment: true,
-      },
-    });
+  // async refundVnpay(
+  //   refundDto: VnpayRefundDto,
+  // ): Promise<VnpayPaymentResponseDto> {
+  //   const order = await this.prisma.order.findUnique({
+  //     where: { id: refundDto.orderId },
+  //     include: {
+  //       payment: true,
+  //     },
+  //   });
 
-    if (!order) {
-      throw new NotFoundException('Đơn hàng không tồn tại');
-    }
+  //   if (!order) {
+  //     throw new NotFoundException('Đơn hàng không tồn tại');
+  //   }
 
-    if (!order.payment) {
-      throw new BadRequestException('Đơn hàng chưa có thanh toán');
-    }
+  //   if (!order.payment) {
+  //     throw new BadRequestException('Đơn hàng chưa có thanh toán');
+  //   }
 
-    if (order.payment.status !== PaymentStatus.PAID) {
-      throw new BadRequestException(
-        'Chỉ có thể hoàn tiền đơn hàng đã thanh toán thành công',
-      );
-    }
+  //   if (order.payment.status !== PaymentStatus.PAID) {
+  //     throw new BadRequestException(
+  //       'Chỉ có thể hoàn tiền đơn hàng đã thanh toán thành công',
+  //     );
+  //   }
 
-    if (refundDto.amount > order.payment.amount) {
-      throw new BadRequestException(
-        'Số tiền hoàn không được lớn hơn số tiền đã thanh toán',
-      );
-    }
+  //   if (refundDto.amount > order.payment.amount) {
+  //     throw new BadRequestException(
+  //       'Số tiền hoàn không được lớn hơn số tiền đã thanh toán',
+  //     );
+  //   }
 
-    const vnpayResponse = await this.vnpayService.refund(refundDto);
+  //   const vnpayResponse = await this.vnpayService.refund(refundDto);
 
-    if (!vnpayResponse.isValidSignature) {
-      this.logger.error('Chữ ký VNPay không hợp lệ');
-      throw new BadRequestException('Chữ ký không hợp lệ');
-    }
+  //   if (!vnpayResponse.isValidSignature) {
+  //     this.logger.error('Chữ ký VNPay không hợp lệ');
+  //     throw new BadRequestException('Chữ ký không hợp lệ');
+  //   }
 
-    if (vnpayResponse.isSuccess) {
-      await this.prisma.payment.update({
-        where: { orderId: refundDto.orderId },
-        data: {
-          status: PaymentStatus.REFUNDED,
-        },
-      });
+  //   if (vnpayResponse.isSuccess) {
+  //     await this.prisma.payment.update({
+  //       where: { orderId: refundDto.orderId },
+  //       data: {
+  //         status: PaymentStatus.REFUNDED,
+  //       },
+  //     });
 
-      // Tạo thông báo khi hoàn tiền thành công
-      await this.notificationService.createNotification({
-        userId: order.userId,
-        type: 'PAYMENT_STATUS',
-        title: 'Hoàn tiền thành công',
-        message: `Đơn hàng #${refundDto.orderId} đã được hoàn tiền ${refundDto.amount.toLocaleString('vi-VN')}đ`,
-        data: {
-          orderId: refundDto.orderId,
-          paymentId: order.payment?.id,
-          amount: refundDto.amount,
-          reason: refundDto.reason,
-        },
-      });
+  //     // Tạo thông báo khi hoàn tiền thành công
+  //     await this.notificationService.createNotification({
+  //       userId: order.userId,
+  //       type: 'PAYMENT_STATUS',
+  //       title: 'Hoàn tiền thành công',
+  //       message: `Đơn hàng #${refundDto.orderId} đã được hoàn tiền ${refundDto.amount.toLocaleString('vi-VN')}đ`,
+  //       data: {
+  //         orderId: refundDto.orderId,
+  //         paymentId: order.payment?.id,
+  //         amount: refundDto.amount,
+  //         reason: refundDto.reason,
+  //       },
+  //     });
 
-      await this.prisma.paymentTransaction.create({
-        data: {
-          paymentId: order.payment.id,
-          transactionId: `REFUND_${Date.now()}`,
-          status: TransactionStatus.SUCCESS,
-          amount: refundDto.amount,
-          paymentMethod: PaymentMethod.VNPAY,
-          provider: 'VNPAY',
-          providerData: {
-            reason: refundDto.reason,
-            responseCode: vnpayResponse.responseCode,
-          },
-        },
-      });
-    }
+  //     await this.prisma.paymentTransaction.create({
+  //       data: {
+  //         paymentId: order.payment.id,
+  //         transactionId: `REFUND_${Date.now()}`,
+  //         status: TransactionStatus.SUCCESS,
+  //         amount: refundDto.amount,
+  //         paymentMethod: PaymentMethod.VNPAY,
+  //         provider: 'VNPAY',
+  //         providerData: {
+  //           reason: refundDto.reason,
+  //           responseCode: vnpayResponse.responseCode,
+  //         },
+  //       },
+  //     });
+  //   }
 
-    return vnpayResponse;
-  }
+  //   return vnpayResponse;
+  // }
 
   async findOne(id: string): Promise<PaymentResponseDto> {
     const payment = await this.prisma.payment.findUnique({

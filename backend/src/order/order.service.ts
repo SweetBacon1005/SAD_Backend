@@ -20,6 +20,7 @@ import {
 } from './dto/order-response.dto';
 import { CreateOrderDto } from './dto/order.dto';
 import { PagedResponseDto, PaginationDto } from './dto/pagination.dto';
+import { NotificationGateway } from '@/notification/notification.gateway';
 
 interface ProductVariant {
   id: string;
@@ -44,7 +45,7 @@ export class OrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly voucherService: VoucherService,
-    private readonly notificationService: NotificationService,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   private validatePaymentMethod(paymentMethod: PaymentMethod): void {
@@ -404,19 +405,6 @@ export class OrderService {
         });
       }
 
-      // Tạo thông báo khi tạo đơn hàng mới
-      await this.notificationService.createNotification({
-        userId,
-        type: 'ORDER_STATUS',
-        title: 'Đơn hàng mới',
-        message: `Đơn hàng #${order.id} đã được tạo thành công với tổng giá trị ${total.toLocaleString('vi-VN')}đ`,
-        data: {
-          orderId: order.id,
-          total,
-          status: order.status,
-        },
-      });
-
       return order as unknown as OrderResponseDto;
     });
   }
@@ -585,8 +573,7 @@ export class OrderService {
     });
 
     // Tạo thông báo khi cập nhật trạng thái đơn hàng
-    await this.notificationService.createNotification({
-      userId: order.userId,
+    await this.notificationGateway.sendNotification(order.userId, {
       type: 'ORDER_STATUS',
       title: 'Cập nhật đơn hàng',
       message: `Đơn hàng #${order.id} đã được cập nhật trạng thái: ${status}`,
@@ -695,8 +682,7 @@ export class OrderService {
       });
 
       // Tạo thông báo khi hủy đơn hàng
-      await this.notificationService.createNotification({
-        userId: order.userId,
+      await this.notificationGateway.sendNotification(order.userId, {
         type: 'ORDER_STATUS',
         title: 'Đơn hàng bị hủy',
         message: `Đơn hàng #${order.id} đã bị hủy`,
