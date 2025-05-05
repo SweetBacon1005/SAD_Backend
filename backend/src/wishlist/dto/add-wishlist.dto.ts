@@ -9,14 +9,6 @@ export class AddWishlistItemDto {
   @IsNotEmpty({ message: 'ID sản phẩm không được để trống' })
   @IsString({ message: 'ID sản phẩm phải là chuỗi' })
   productId: string;
-
-  @ApiPropertyOptional({
-    description: 'Ghi chú cho sản phẩm',
-    example: 'Màu đen, size M',
-  })
-  @IsOptional()
-  @IsString({ message: 'Ghi chú phải là chuỗi' })
-  note?: string;
 }
 
 // Tạo alias để tương thích với code mới

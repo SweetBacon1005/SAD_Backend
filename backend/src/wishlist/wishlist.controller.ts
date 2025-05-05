@@ -15,8 +15,8 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { AddWishlistItemDto } from './dto/add-wishlist-item.dto';
-import { WishlistFilterDto, WishlistListResponseDto } from './dto/pagination-wishlist.dto';
+import { AddWishlistItemDto } from './dto/add-wishlist.dto';
+import { WishlistFilterDto } from './dto/pagination-wishlist.dto';
 import { WishlistResponseDto } from './dto/wishlist-response.dto';
 import { WishlistService } from './wishlist.service';
 
@@ -27,21 +27,18 @@ export class WishlistController {
 
   @Get()
   @ApiOperation({
-    summary: 'Lấy hoặc tạo mới wishlist của người dùng hiện tại',
+    summary: 'Lấy danh sách wishlist của người dùng hiện tại',
   })
   @ApiResponse({
     status: 200,
-    description: 'Wishlist đã được tìm thấy hoặc tạo mới.',
+    description: 'Danh sách wishlist của người dùng hiện tại',
     type: WishlistResponseDto,
+    isArray: true,
   })
   @ApiBearerAuth()
-  async getUserWishlist(
-    @Req() req: Request,
-    @Query() filter: WishlistFilterDto,
-  ): Promise<WishlistResponseDto> {
+  async getUserWishlist(@Req() req: Request): Promise<WishlistResponseDto[]> {
     const userId = req['user'].id;
-    const result = await this.wishlistService.findAll(userId, filter);
-    return result.data[0];
+    return this.wishlistService.getWishlistByUserId(userId);
   }
 
   @Post("search")
@@ -78,9 +75,7 @@ export class WishlistController {
     @Body() addItemDto: AddWishlistItemDto,
   ): Promise<WishlistResponseDto> {
     const userId = req['user'].id;
-    const wishlistList = await this.wishlistService.findAll(userId);
-    const wishlistId = wishlistList.data[0].id;
-    return this.wishlistService.addItem(wishlistId, userId, addItemDto);
+    return this.wishlistService.addItem(userId, addItemDto);
   }
 
   @Delete('items/:productId')
@@ -99,9 +94,7 @@ export class WishlistController {
     @Param('productId') productId: string,
   ): Promise<WishlistResponseDto> {
     const userId = req['user'].id;
-    const wishlistList = await this.wishlistService.findAll(userId);
-    const wishlistId = wishlistList.data[0].id;
-    return this.wishlistService.removeItem(wishlistId, userId, productId);
+    return this.wishlistService.removeItem(userId, productId);
   }
 
   @Delete('items')
@@ -116,8 +109,6 @@ export class WishlistController {
   @ApiBearerAuth()
   async clearItems(@Req() req: Request): Promise<WishlistResponseDto> {
     const userId = req['user'].id;
-    const wishlistList = await this.wishlistService.findAll(userId);
-    const wishlistId = wishlistList.data[0].id;
-    return this.wishlistService.clearItems(wishlistId, userId);
+    return this.wishlistService.clearItems(userId);
   }
 }

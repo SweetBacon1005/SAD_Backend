@@ -3,27 +3,20 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { AddWishlistItemDto } from './dto/add-wishlist-item.dto';
-import {
-  WishlistFilterDto,
-  WishlistListResponseDto,
-} from './dto/pagination-wishlist.dto';
-import {
-  WishlistItemResponseDto,
-  WishlistResponseDto,
-} from './dto/wishlist-response.dto';
+import { AddWishlistItemDto } from './dto/add-wishlist.dto';
+import { WishlistFilterDto } from './dto/pagination-wishlist.dto';
+import { WishlistResponseDto } from './dto/wishlist-response.dto';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class WishlistService {
   constructor(private prisma: PrismaService) {}
 
-  async create(
-    userId: string,
-  ): Promise<WishlistResponseDto> {
-    const existingWishlist = await this.prisma.wishlist.findUnique({
+  async getWishlistByUserId(userId: string): Promise<any> {
+    const wishlist = await this.prisma.wishlist.findMany({
       where: { userId },
       include: {
         user: {
@@ -32,82 +25,73 @@ export class WishlistService {
             name: true,
           },
         },
-        items: {
+        product: {
           include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                basePrice: true,
-                images: true,
-              },
-            },
+            category: true,
           },
         },
       },
     });
 
-    if (existingWishlist) {
-      return this.mapToWishlistResponseDto(existingWishlist);
-    }
-
-    const wishlist = await this.prisma.wishlist.create({
-      data: {
-        userId,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        items: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                basePrice: true,
-                images: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    return this.mapToWishlistResponseDto(wishlist);
+    return wishlist.map(this.mapToWishlistResponseDto);
   }
 
-  async findAll(
+  async search(
     userId: string,
     filter: WishlistFilterDto = {},
-  ): Promise<WishlistListResponseDto> {
-    let wishlist = await this.prisma.wishlist.findUnique({
-      where: { userId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        items: {
-          include: {
-            product: true,
-          },
-          orderBy: {
-            addedAt: 'desc',
-          },
-        },
-      },
-    });
+  ): Promise<any> {
+    const currentPage = Number(filter.currentPage) || 1;
+    const pageSize = Number(filter.pageSize) || 10;
+    const skip = (currentPage - 1) * pageSize;
 
-    if (!wishlist) {
-      wishlist = await this.prisma.wishlist.create({
-        data: {
+    const query = filter.query?.trim();
+    const categoryId = filter.categoryId;
+    const sortBy = filter.sortBy ?? 'createdAt';
+    const sortOrder = filter.sortOrder?.toLowerCase() === 'asc' ? 'asc' : 'desc';
+    const minPrice = filter.minPrice;
+    const maxPrice = filter.maxPrice;
+  
+    if (minPrice && maxPrice && minPrice > maxPrice) {
+      throw new BadRequestException(
+        'Giá tối thiểu không được lớn hơn giá tối đa',
+      );
+    }
+  
+    const productWhere: Prisma.ProductWhereInput = {};
+  
+    if (query) {
+      productWhere.name = { contains: query, mode: 'insensitive' };
+    }
+  
+    if (categoryId) {
+      productWhere.categoryId = categoryId;
+    }
+  
+    if (minPrice || maxPrice) {
+      productWhere.basePrice = {};
+      if (minPrice) productWhere.basePrice.gte = minPrice;
+      if (maxPrice) productWhere.basePrice.lte = maxPrice;
+    }
+  
+    // Tìm các sản phẩm phù hợp filter
+    const matchingProducts = await this.prisma.product.findMany({
+      where: productWhere,
+      select: { id: true },
+    });
+  
+    const productIds = matchingProducts.map(p => p.id);
+
+    const [total, wishlist] = await Promise.all([
+      await this.prisma.wishlist.count({
+        where: {
           userId,
+          productId: { in: productIds },
+        },
+      }),
+      await this.prisma.wishlist.findMany({
+        where: {
+          userId,
+          productId: { in: productIds },
         },
         include: {
           user: {
@@ -116,29 +100,43 @@ export class WishlistService {
               name: true,
             },
           },
-          items: {
+          product: {
             include: {
-              product: true,
-            },
-            orderBy: {
-              addedAt: 'desc',
+              category: true,
             },
           },
         },
-      });
-    }
+        orderBy: sortBy === 'price'
+        ? { product: { basePrice: sortOrder } }
+        : { createdAt: sortOrder },
+        skip: skip,
+        take: pageSize,
+      })
+    ]);
 
     return {
-      data: [this.mapToResponseDto(wishlist)],
-      currentPage: 1,
-      totalPages: 1,
-      total: 1,
+      total: total,
+      currentPage: currentPage,
+      totalPage: Math.ceil(total / pageSize),
+      data: wishlist.map(this.mapToWishlistResponseDto)
     };
   }
+  
 
-  async findOne(id: string, userId: string): Promise<WishlistResponseDto> {
+  async addItem( userId: string, addItemDto: AddWishlistItemDto): Promise<any> {
     const wishlist = await this.prisma.wishlist.findUnique({
-      where: { id },
+      where: { userId: userId, productId: addItemDto.productId },
+    });
+    
+    if (wishlist) {
+      throw new ConflictException('Sản phẩm đã tồn tại trong danh sách yêu thích');
+    }
+
+    const newWishlistItem = await this.prisma.wishlist.create({
+      data: {
+        userId: userId,
+        productId: addItemDto.productId,
+      },
       include: {
         user: {
           select: {
@@ -146,209 +144,42 @@ export class WishlistService {
             name: true,
           },
         },
-        items: {
-          include: {
-            product: true,
-          },
-          orderBy: {
-            addedAt: 'desc',
+        product: {
+          select: {
+            id: true,
+            name: true,
+            basePrice: true,
+            images: true,
           },
         },
       },
     });
 
-    if (!wishlist) {
-      throw new NotFoundException('Không tìm thấy danh sách yêu thích');
-    }
-
-    if (wishlist.userId !== userId) {
-      throw new ForbiddenException(
-        'Bạn không có quyền xem danh sách yêu thích này',
-      );
-    }
-
-    return this.mapToResponseDto(wishlist);
+    return this.mapToWishlistResponseDto(newWishlistItem);
   }
 
-  async search(
-    userId: string,
-    filter: WishlistFilterDto = {},
-  ): Promise<any> {
-    const query = filter.query?.trim();
-    const categoryId = filter.categoryId;
-    const sortBy = filter.sortBy ?? 'createdAt';
-    const sortOrder = filter.sortOrder?.toLowerCase() === 'asc' ? 'asc' : 'desc';
-    const minPrice = filter.minPrice;
-    const maxPrice = filter.maxPrice;
-  
-    // Lấy wishlist của user
+  async removeItem(userId: string, productId: string): Promise<any> {
     const wishlist = await this.prisma.wishlist.findUnique({
+      where: { userId: userId, productId: productId },
+    });
+
+    if (!wishlist) {
+      throw new NotFoundException('Danh sách yêu thích không tồn tại');
+    }
+
+    await this.prisma.wishlist.delete({
+      where: { id: wishlist.id },
+    });
+
+    return null;
+  }
+
+  async clearItems(userId: string): Promise<any> {
+    await this.prisma.wishlist.deleteMany({
       where: { userId },
-      include: {
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
-    });
-  
-    if (!wishlist) {
-      return { items: [], total: 0 };
-    }
-    
-    // Lọc sản phẩm theo điều kiện
-    let filteredItems = wishlist.items.filter((item) => {
-      const product = item.product;
-  
-      if (query && query !== null && query !== undefined && query != "" && !product.name.toLowerCase().includes(query.toLowerCase())) {
-        return false;
-      }
-  
-      if (minPrice && minPrice !== null && minPrice !== undefined && product.basePrice < minPrice) {
-        return false;
-      }
-  
-      if (maxPrice && maxPrice !== null && maxPrice !== undefined && product.basePrice > maxPrice) {
-        return false;
-      }
-  
-      return true;
-    });
-  
-    // Sắp xếp
-    filteredItems.sort((a, b) => {
-      const valA = a.product[sortBy=="price" ? "basePrice" : sortBy];
-      const valB = b.product[sortBy=="price" ? "basePrice" : sortBy];
-  
-      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
-      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
-      return 0;
-    });
-  
-    // Trả về kết quả
-    return {
-      total: filteredItems.length,
-      items: filteredItems.map((item) => ({
-        id: item.productId,
-        name: item.product.name,
-        basePrice: item.product.basePrice,
-        images: item.product.images,
-      })),
-    };
-  }
-
-  async addItem(
-    wishlistId: string,
-    userId: string,
-    addItemDto: AddWishlistItemDto,
-  ): Promise<WishlistResponseDto> {
-    const wishlist = await this.prisma.wishlist.findUnique({
-      where: { id: wishlistId },
     });
 
-    if (!wishlist) {
-      throw new NotFoundException('Danh sách yêu thích không tồn tại');
-    }
-
-    if (wishlist.userId !== userId) {
-      throw new ForbiddenException(
-        'Bạn không có quyền thêm sản phẩm vào danh sách này',
-      );
-    }
-
-    const product = await this.prisma.product.findUnique({
-      where: { id: addItemDto.productId },
-    });
-
-    if (!product) {
-      throw new NotFoundException('Sản phẩm không tồn tại');
-    }
-
-    const existingItem = await this.prisma.wishlistItem.findFirst({
-      where: {
-        wishlistId,
-        productId: addItemDto.productId,
-      },
-    });
-
-    if (existingItem) {
-      throw new ConflictException(
-        'Sản phẩm đã tồn tại trong danh sách yêu thích',
-      );
-    }
-
-    await this.prisma.wishlistItem.create({
-      data: {
-        wishlistId,
-        productId: addItemDto.productId,
-        note: addItemDto.note,
-      },
-    });
-
-    return this.findOne(wishlistId, userId);
-  }
-
-  async removeItem(
-    wishlistId: string,
-    userId: string,
-    productId: string,
-  ): Promise<WishlistResponseDto> {
-    const wishlist = await this.prisma.wishlist.findUnique({
-      where: { id: wishlistId },
-    });
-
-    if (!wishlist) {
-      throw new NotFoundException('Danh sách yêu thích không tồn tại');
-    }
-
-    if (wishlist.userId !== userId) {
-      throw new ForbiddenException(
-        'Bạn không có quyền xóa sản phẩm khỏi danh sách này',
-      );
-    }
-
-    const item = await this.prisma.wishlistItem.findFirst({
-      where: {
-        wishlistId,
-        productId,
-      },
-    });
-
-    if (!item) {
-      throw new NotFoundException('Sản phẩm không tồn tại trong danh sách');
-    }
-
-    await this.prisma.wishlistItem.delete({
-      where: { id: item.id },
-    });
-
-    return this.findOne(wishlistId, userId);
-  }
-
-  async clearItems(
-    wishlistId: string,
-    userId: string,
-  ): Promise<WishlistResponseDto> {
-    const wishlist = await this.prisma.wishlist.findUnique({
-      where: { id: wishlistId },
-    });
-
-    if (!wishlist) {
-      throw new NotFoundException('Danh sách yêu thích không tồn tại');
-    }
-
-    if (wishlist.userId !== userId) {
-      throw new ForbiddenException(
-        'Bạn không có quyền xóa sản phẩm khỏi danh sách này',
-      );
-    }
-
-    await this.prisma.wishlistItem.deleteMany({
-      where: { wishlistId },
-    });
-
-    return this.findOne(wishlistId, userId);
+    return null;
   }
 
   private mapToWishlistResponseDto(wishlist: any): WishlistResponseDto {
@@ -358,44 +189,12 @@ export class WishlistService {
         id: wishlist.user?.id || '',
         name: wishlist.user?.name || '',
       },
-      items: wishlist.items
-        ? wishlist.items.map((item) => this.mapToWishlistItemResponseDto(item))
-        : [],
-      createdAt: wishlist.createdAt,
-      updatedAt: wishlist.updatedAt,
-    };
-  }
-
-  private mapToWishlistItemResponseDto(item: any): WishlistItemResponseDto {
-    return {
-      id: item.id,
       product: {
-        id: item.product.id,
-        name: item.product.name,
-        basePrice: item.product.basePrice,
-        images: item.product.images
+        id: wishlist.product?.id,
+        name: wishlist.product?.name,
+        basePrice: wishlist.product?.basePrice,
+        images: wishlist.product?.images
       },
-      note: item.note,
-      addedAt: item.addedAt,
-    };
-  }
-
-  private mapToResponseDto(wishlist: any): WishlistResponseDto {
-    return {
-      id: wishlist.id,
-      user: wishlist.user,
-      items:
-        wishlist.items?.map((item) => ({
-          id: item.id,
-          product: {
-            id: item.product.id,
-            name: item.product.name,
-            basePrice: item.product.basePrice,
-            images: item.product.images,
-          },
-          note: item.note,
-          addedAt: item.addedAt,
-        })) || [],
       createdAt: wishlist.createdAt,
       updatedAt: wishlist.updatedAt,
     };

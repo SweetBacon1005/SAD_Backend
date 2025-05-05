@@ -75,7 +75,7 @@ model Product {
   updatedAt     DateTime?        @updatedAt
   cartItems     CartItem[]
   orderItems    OrderItem[]
-  wishlistItems WishlistItem[]
+  wishlist      Wishlist[]
   reviews       Review[]
 }
 
@@ -231,19 +231,10 @@ model Wishlist {
   id          String         @id @default(auto()) @map("_id") @db.ObjectId
   userId      String         @unique @db.ObjectId
   user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items       WishlistItem[]
+  productId   String         @unique @db.ObjectId
+  product     Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime?      @updatedAt
-}
-
-model WishlistItem {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  wishlistId String   @db.ObjectId
-  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
-  productId  String   @db.ObjectId
-  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  addedAt    DateTime @default(now())
-  note       String?
 }
 
 model Review {
