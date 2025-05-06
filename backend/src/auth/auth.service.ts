@@ -43,7 +43,6 @@ export class AuthService {
       where: { email: email.toLowerCase() },
     });
 
-
     if (existingUser) {
       if (existingUser.isEmailVerified) {
         throw new ConflictException('User already exists');
@@ -302,6 +301,30 @@ export class AuthService {
     };
     return this.jwtService.sign(payload, {
       expiresIn: ACCESS_TOKEN_EXPIRATION,
+    });
+  }
+
+  async resetPasswordWithoutToken(
+    id: string,
+    password: string,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        passwordResetOTP: null,
+        passwordResetOTPExpires: null,
+      },
     });
   }
 

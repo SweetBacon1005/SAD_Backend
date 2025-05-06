@@ -1,8 +1,9 @@
 import { Public } from '@/common/decorators/public.decorator';
 import { Roles } from '@/common/decorators/role.decorator';
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, Req } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiOperation,
   ApiResponse,
   ApiTags,
@@ -136,5 +137,23 @@ export class AuthController {
   })
   async resetPassword(@Body() payload: ResetPasswordDto): Promise<void> {
     return this.authService.resetPassword(payload);
+    }
+
+  @Roles(UserRole.CUSTOMER)
+  @Post('reset-password-without-token')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        password: { type: 'string' },
+      },
+    },
+  })
+  async resetPasswordWithoutToken(
+    @Body() payload: { password: string },
+    @Req() req: Request,
+  ): Promise<void> {
+    const { id } = req['user'];
+    return this.authService.resetPasswordWithoutToken(id, payload.password);
   }
 }
