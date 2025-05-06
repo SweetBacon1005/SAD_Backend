@@ -92,4 +92,14 @@ export class SearchProductDto {
   @Min(0)
   @Type(() => Number)
   maxPrice?: number;
+
+  @ApiProperty({
+    description: 'Lọc sản phẩm có khuyến mãi',
+    example: true,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Boolean)
+  @IsOptional()
+  haveDiscount?: boolean;
 }

@@ -18,6 +18,9 @@ class ProductDto {
   @ApiProperty({ description: 'Giá cơ bản', example: 120000 })
   basePrice: number;
 
+  @ApiProperty({ description: 'Khuyến mãi', example: 10 })
+  discount: number | null;
+
   @ApiProperty({ description: 'Danh sách hình ảnh', type: [String], example: ['url1.jpg', 'url2.jpg'] })
   images: string[];
 }

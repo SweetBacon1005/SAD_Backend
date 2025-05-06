@@ -60,19 +60,6 @@ export class ProductController {
     return this.productService.getRecommendProducts(user_id);
   }
 
-  @Post('get-products')
-  @Public()
-  @ApiOperation({ summary: 'Lấy danh sách sản phẩm có phân trang và lọc' })
-  @ApiOkResponse({
-    description: 'Danh sách sản phẩm và thông tin phân trang',
-    type: GetProductsResponseDto,
-  })
-  async getProducts(
-    @Body() payload: GetProductsDto,
-  ): Promise<GetProductsResponseDto> {
-    return this.productService.getProducts(payload);
-  }
-
   @Get('all')
   @Public()
   @ApiOperation({ summary: 'Lấy tất cả sản phẩm' })
@@ -84,9 +71,22 @@ export class ProductController {
     return this.productService.getAllProducts();
   }
 
+  @Post('get-products')
+  @Public()
+  @ApiOperation({ summary: 'Lấy danh sách sản phẩm có phân trang' })
+  @ApiOkResponse({
+    description: 'Danh sách sản phẩm và thông tin phân trang',
+    type: GetProductsResponseDto,
+  })
+  async getProducts(
+    @Body() payload: GetProductsDto,
+  ): Promise<GetProductsResponseDto> {
+    return this.productService.getProducts(payload);
+  }
+
   @Post('search')
   @Public()
-  @ApiOperation({ summary: 'Tìm kiếm sản phẩm theo từ khóa' })
+  @ApiOperation({ summary: 'Tìm kiếm sản phẩm có phân trang và lọc' })
   @ApiOkResponse({
     description: 'Kết quả tìm kiếm sản phẩm',
     type: SearchProductResponseDto,
@@ -114,25 +114,6 @@ export class ProductController {
     );
   }
 
-  @Post('price-comparison')
-  @Public()
-  @ApiOperation({ summary: 'So sánh giá sản phẩm ở các cửa hàng khác nhau' })
-  @ApiOkResponse({
-    description: 'Kết quả so sánh giá sản phẩm',
-    type: PriceComparisonResponseDto,
-  })
-  async compareProductPrices(
-    @Body() payload: PriceComparisonRequestDto,
-  ): Promise<PriceComparisonResponseDto> {
-    return this.productService.compareProductPrices(
-      payload.productName,
-      payload.category,
-      payload.inStock,
-      payload.currentPage,
-      payload.pageSize,
-    );
-  }
-
   @Get(':id')
   @Public()
   @ApiOperation({ summary: 'Lấy thông tin sản phẩm theo ID' })
@@ -153,6 +134,25 @@ export class ProductController {
       throw new NotFoundException(`Không tìm thấy sản phẩm với ID ${id}`);
     }
     return product;
+  }
+
+  @Post('price-comparison')
+  @Public()
+  @ApiOperation({ summary: 'So sánh giá sản phẩm ở các cửa hàng khác nhau' })
+  @ApiOkResponse({
+    description: 'Kết quả so sánh giá sản phẩm',
+    type: PriceComparisonResponseDto,
+  })
+  async compareProductPrices(
+    @Body() payload: PriceComparisonRequestDto,
+  ): Promise<PriceComparisonResponseDto> {
+    return this.productService.compareProductPrices(
+      payload.productName,
+      payload.category,
+      payload.inStock,
+      payload.currentPage,
+      payload.pageSize,
+    );
   }
 
   @Post()

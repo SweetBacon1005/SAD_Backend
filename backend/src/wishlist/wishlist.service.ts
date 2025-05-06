@@ -81,6 +81,16 @@ export class WishlistService {
   
     const productIds = matchingProducts.map(p => p.id);
 
+    const currentDate = new Date();
+    const vouchers = await this.prisma.voucher.findMany({
+      where: {
+        isActive: true,
+        startDate: { lte: currentDate },
+        endDate: { gte: currentDate },
+        applicableFor: "SPECIFIC_PRODUCTS",
+      },
+    });
+
     const [total, wishlist] = await Promise.all([
       await this.prisma.wishlist.count({
         where: {
@@ -106,23 +116,36 @@ export class WishlistService {
             },
           },
         },
-        orderBy: sortBy === 'price'
-        ? { product: { basePrice: sortOrder } }
-        : { createdAt: sortOrder },
-        skip: skip,
-        take: pageSize,
+        orderBy: sortBy === 'createdAt' ? { createdAt: sortOrder }: { createdAt: "desc" },
       })
     ]);
+
+    let data = wishlist.map((item) => {
+      return this.mapToWishlistWithVoucherResponseDto(item, vouchers);
+    });
+
+    if (sortBy === 'price' && sortOrder) {
+      data.sort((a, b) => {
+        const discountA = a.product.discount || 0;
+        const priceA = a.product.basePrice * (1 - discountA / 100);
+
+        const discountB = b.product.discount || 0;
+        const priceB = b.product.basePrice * (1 - discountB / 100);
+    
+        return sortOrder === 'asc' ? priceA - priceB : priceB - priceA;
+      });
+    }
+
+    data = data.slice(skip, skip + pageSize);
 
     return {
       total: total,
       currentPage: currentPage,
-      totalPage: Math.ceil(total / pageSize),
-      data: wishlist.map(this.mapToWishlistResponseDto)
+      totalPages: Math.ceil(total / pageSize),
+      data
     };
   }
   
-
   async addItem( userId: string, addItemDto: AddWishlistItemDto): Promise<any> {
     const wishlist = await this.prisma.wishlist.findUnique({
       where: { userId: userId, productId: addItemDto.productId },
@@ -193,7 +216,37 @@ export class WishlistService {
         id: wishlist.product?.id,
         name: wishlist.product?.name,
         basePrice: wishlist.product?.basePrice,
-        images: wishlist.product?.images
+        images: wishlist.product?.images,
+        discount: 0,
+      },
+      createdAt: wishlist.createdAt,
+      updatedAt: wishlist.updatedAt,
+    };
+  }
+
+  private mapToWishlistWithVoucherResponseDto(wishlist: any, vouchers): WishlistResponseDto {
+    const relatedVouchers = vouchers.filter((v) =>
+      v.conditions.productIds.includes(wishlist.product.id),
+    );
+
+    const bestVoucher = relatedVouchers.reduce((max, v) => {
+      return !max || v.discountValue > max.discountValue ? v : max;
+    }, null);
+
+    const discountValue = bestVoucher ? bestVoucher.discountValue : 0;
+    
+    return {
+      id: wishlist.id,
+      user: {
+        id: wishlist.user?.id || '',
+        name: wishlist.user?.name || '',
+      },
+      product: {
+        id: wishlist.product?.id,
+        name: wishlist.product?.name,
+        basePrice: wishlist.product?.basePrice,
+        discount: discountValue,
+        images: wishlist.product?.images,
       },
       createdAt: wishlist.createdAt,
       updatedAt: wishlist.updatedAt,

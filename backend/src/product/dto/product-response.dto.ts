@@ -15,6 +15,9 @@ export class ProductResponseDto {
   @ApiProperty({ description: 'Giá cơ bản', example: 120000 })
   basePrice: number;
 
+  @ApiProperty({ description: 'Khuyến mãi', example: 10 })
+  discount: number | null;
+
   @ApiProperty({ description: 'Danh sách danh mục', type: [CategoryResponseDto] })
   categories: CategoryResponseDto[];
 
