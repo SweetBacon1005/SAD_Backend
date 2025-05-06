@@ -221,6 +221,22 @@ export class OrderController {
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Cập nhật trạng thái đơn hàng (Admin)' })
   @ApiParam({ name: 'id', description: 'ID đơn hàng' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: [
+            OrderStatus.PENDING,
+            OrderStatus.SHIPPED,
+            OrderStatus.DELIVERED,
+            OrderStatus.CANCELLED,
+          ],
+        },
+      },
+    },
+  })
   @ApiOkResponse({
     description: 'Trạng thái đơn hàng đã được cập nhật',
     type: OrderStatusResponseDto,
