@@ -1,6 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
-import { CartItemAttributesDto } from './cart-attributes.dto';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsInt, IsString, Min } from 'class-validator';
 
 export class UpdateCartItemDto {
   @ApiProperty({
@@ -18,12 +17,4 @@ export class UpdateCartItemDto {
   @IsInt()
   @Min(1)
   quantity: number;
-
-  @ApiPropertyOptional({
-    description: 'ID của biến thể sản phẩm mới (nếu muốn đổi biến thể)',
-    example: '6151f3d2e149e32b3404c8c8',
-  })
-  @IsOptional()
-  @IsString()
-  variantId?: string;
 } 

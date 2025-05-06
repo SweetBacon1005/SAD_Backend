@@ -20,14 +20,12 @@ import { UserRole } from '@prisma/client';
 import { CartService } from './cart.service';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
 import {
-  AddCartItemResponseDto,
+  CartItemResponseDto,
   CartResponseDto,
   ClearCartResponseDto,
   RemoveCartItemResponseDto,
-  UpdateCartResponseDto,
 } from './dto/cart-response.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
-import { UpdateCartDto } from './dto/update-cart.dto';
 
 @ApiTags('cart')
 @Controller('cart')
@@ -54,12 +52,12 @@ export class CartController {
   @ApiOperation({ summary: 'Thêm sản phẩm vào giỏ hàng' })
   @ApiCreatedResponse({
     description: 'Sản phẩm đã được thêm vào giỏ hàng',
-    type: AddCartItemResponseDto,
+    type: CartItemResponseDto,
   })
   async addItem(
     @Request() req: Request,
     @Body() addCartItemDto: AddCartItemDto,
-  ): Promise<AddCartItemResponseDto> {
+  ): Promise<CartItemResponseDto> {
     const { id } = req['user'];
     return this.cartService.addItemToCart(id, addCartItemDto);
   }
@@ -69,12 +67,12 @@ export class CartController {
   @ApiOperation({ summary: 'Cập nhật sản phẩm trong giỏ hàng' })
   @ApiOkResponse({
     description: 'Sản phẩm trong giỏ hàng đã được cập nhật',
-    type: AddCartItemResponseDto,
+    type: CartItemResponseDto,
   })
   async updateItem(
     @Request() req: Request,
     @Body() updateCartItemDto: UpdateCartItemDto,
-  ): Promise<AddCartItemResponseDto> {
+  ): Promise<CartItemResponseDto> {
     const { id } = req['user'];
     return this.cartService.updateCartItem(id, updateCartItemDto);
   }
@@ -108,32 +106,5 @@ export class CartController {
   async clearCart(@Request() req: Request): Promise<ClearCartResponseDto> {
     const { id } = req['user'];
     return this.cartService.clearCart(id);
-  }
-
-  @Patch()
-  @Roles(UserRole.CUSTOMER)
-  @ApiOperation({ summary: 'Cập nhật thông tin giỏ hàng' })
-  @ApiOkResponse({
-    description: 'Thông tin giỏ hàng đã được cập nhật',
-    type: UpdateCartResponseDto,
-  })
-  async updateCart(
-    @Request() req: Request,
-    @Body() updateCartDto: UpdateCartDto,
-  ): Promise<UpdateCartResponseDto> {
-    const { id } = req['user'];
-    return this.cartService.updateCart(id, updateCartDto);
-  }
-
-  @Get('count')
-  @Roles(UserRole.CUSTOMER)
-  @ApiOperation({ summary: 'Lấy số lượng sản phẩm trong giỏ hàng' })
-  @ApiOkResponse({
-    description: 'Số lượng sản phẩm trong giỏ hàng',
-    type: Number,
-  })
-  async getCartItemCount(@Request() req: Request): Promise<number> {
-    const { id } = req['user'];
-    return this.cartService.getCartItemCount(id);
   }
 }

@@ -15,7 +15,7 @@ export class AddCartItemDto {
   })
   @IsOptional()
   @IsString()
-  variantId?: string;
+  variantId: string;
 
   @ApiProperty({
     description: 'Số lượng sản phẩm',

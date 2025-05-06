@@ -3,20 +3,67 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, ProductVariant } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
 import {
-  AddCartItemResponseDto,
+  CartItemResponseDto,
   CartResponseDto,
   RemoveCartItemResponseDto,
 } from './dto/cart-response.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
-import { UpdateCartDto } from './dto/update-cart.dto';
 
 @Injectable()
 export class CartService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private mapCartToResponse(cart: any, vouchers: any[] = []): CartResponseDto {
+    return {
+      id: cart.id,
+      userId: cart.userId,
+      items: cart.items.map((item: any) => this.mapCartItemToResponse(item, vouchers)),
+      createdAt: cart.createdAt.toISOString(),
+      updatedAt: cart.updatedAt ? cart.updatedAt.toISOString() : null,
+    };
+  }
+
+  private mapCartItemToResponse(cartItem: any, vouchers: any[] = []): CartItemResponseDto {
+    const relatedVouchers = vouchers.filter((v) =>
+      v.conditions.productIds.includes(cartItem.variant.product.id),
+    );
+
+    const bestVoucher = relatedVouchers.reduce((max, v) => {
+      return !max || v.discountValue > max.discountValue ? v : max;
+    }, null);
+
+    const discountValue = bestVoucher ? bestVoucher.discountValue : 0;
+
+    return {
+      id: cartItem.id,
+      cartId: cartItem.cartId,
+      variantId: cartItem.variantId || null,
+      quantity: cartItem.quantity,
+      addedAt: cartItem.createdAt.toISOString(),
+      variant: {
+        id: cartItem.variant.id,
+        price: cartItem.variant.price,
+        quantity: cartItem.variant.quantity,
+        attributes: cartItem.variant.attributes,
+      },
+      product: {
+        id: cartItem.variant.product.id,
+        name: cartItem.variant.product.name,
+        basePrice: cartItem.variant.product.basePrice,
+        images: cartItem.variant.product.images,
+        discount: discountValue,
+        store: cartItem.variant.product.store
+          ? {
+              id: cartItem.variant.product.store.id,
+              name: cartItem.variant.product.store.name,
+            }
+          : undefined
+      },
+    };
+  }
 
   async getCartByUserId(userId: string): Promise<CartResponseDto> {
     const cart = await this.prisma.cart.findUnique({
@@ -24,12 +71,15 @@ export class CartService {
       include: {
         items: {
           include: {
-            product: {
+            variant: {
               include: {
-                variants: true,
-                store: true,
+                product: {
+                  include: {
+                    store: true,
+                  },
+                },
               },
-            },
+            }
           },
         },
       },
@@ -43,12 +93,7 @@ export class CartService {
         include: {
           items: {
             include: {
-              product: {
-                include: {
-                  variants: true,
-                  store: true,
-                },
-              },
+              variant: true
             },
           },
         },
@@ -56,145 +101,44 @@ export class CartService {
       return this.mapCartToResponse(newCart);
     }
 
-    return this.mapCartToResponse(cart);
-  }
-
-  private mapCartToResponse(cart: any): CartResponseDto {
-    const totalItems = cart.items.reduce(
-      (total, item) => total + item.quantity,
-      0,
-    );
-
-    const totalAmount = cart.items.reduce((total, item) => {
-      return total + item.selectedPrice * item.quantity;
-    }, 0);
-
-    const items = cart.items.map((item) => {
-      const selectedVariant = item.variantId
-        ? item.product.variants.find((v) => v.id === item.variantId)
-        : null;
-
-      return {
-        id: item.id,
-        productId: item.productId,
-        variantId: item.variantId || null,
-        selectedPrice: item.selectedPrice,
-        quantity: item.quantity,
-        addedAt: item.createdAt.toISOString(),
-        product: {
-          id: item.product.id,
-          name: item.product.name,
-          basePrice: item.product.basePrice,
-          images: item.product.images,
-          store: item.product.store
-            ? {
-                id: item.product.store.id,
-                name: item.product.store.name,
-              }
-            : undefined,
-          variants: item.product.variants.map((variant) => ({
-            id: variant.id,
-            name: variant.name,
-            price: variant.price,
-            quantity: variant.quantity,
-            isSelected: variant.id === item.variantId,
-          })),
-          selectedVariant: selectedVariant
-            ? {
-                id: selectedVariant.id,
-                name: selectedVariant.name,
-                price: selectedVariant.price,
-                quantity: selectedVariant.quantity,
-              }
-            : null,
-        },
-        totalPrice: item.selectedPrice * item.quantity,
-      };
+    const currentDate = new Date();
+    const vouchers = await this.prisma.voucher.findMany({
+      where: {
+        isActive: true,
+        startDate: { lte: currentDate },
+        endDate: { gte: currentDate },
+        applicableFor: "SPECIFIC_PRODUCTS",
+      },
     });
 
-    return {
-      id: cart.id,
-      userId: cart.userId,
-      items: items,
-      metadata: cart.metadata ? JSON.parse(JSON.stringify(cart.metadata)) : {},
-      createdAt: cart.createdAt.toISOString(),
-      updatedAt: cart.updatedAt ? cart.updatedAt.toISOString() : null,
-      totalItems,
-      totalAmount,
-    };
-  }
-
-  private mapCartItemToResponse(cartItem: any): AddCartItemResponseDto {
-    return {
-      id: cartItem.id,
-      cartId: cartItem.cartId,
-      productId: cartItem.productId,
-      variantId: cartItem.variantId || null,
-      selectedPrice: cartItem.selectedPrice,
-      quantity: cartItem.quantity,
-      addedAt: cartItem.createdAt.toISOString(),
-      product: {
-        id: cartItem.product.id,
-        name: cartItem.product.name,
-        basePrice: cartItem.product.basePrice,
-        images: cartItem.product.images,
-        store: cartItem.product.store
-          ? {
-              id: cartItem.product.store.id,
-              name: cartItem.product.store.name,
-            }
-          : undefined,
-        selectedVariant: cartItem.variantId
-          ? {
-              id: cartItem.variantId,
-              name:
-                cartItem.product.variants?.find(
-                  (v) => v.id === cartItem.variantId,
-                )?.name || 'Unknown Variant',
-              price: cartItem.selectedPrice,
-              quantity:
-                cartItem.product.variants?.find(
-                  (v) => v.id === cartItem.variantId,
-                )?.quantity || 0,
-            }
-          : null,
-      },
-      totalPrice: cartItem.selectedPrice * cartItem.quantity,
-    };
+    return this.mapCartToResponse(cart, vouchers);
   }
 
   async addItemToCart(
     userId: string,
     data: AddCartItemDto,
-  ): Promise<AddCartItemResponseDto> {
+  ): Promise<CartItemResponseDto> {
     return this.prisma.$transaction(async (prisma) => {
-      const product = await prisma.product.findUnique({
-        where: { id: data.productId },
+      
+      const productVariant = await prisma.productVariant.findUnique({
+        where: { id: data.variantId },
         include: {
-          variants: true,
-          store: true,
+          product: true,
         },
       });
 
-      if (!product) {
+      if (!productVariant) {
+        throw new NotFoundException('Biến thể sản phẩm không tồn tại');
+      }
+
+      if (!productVariant.product){
         throw new NotFoundException('Sản phẩm không tồn tại');
       }
 
-      let selectedPrice = product.basePrice;
-      let selectedVariant: ProductVariant | undefined = undefined;
-
-      if (data.variantId) {
-        selectedVariant = product.variants.find((v) => v.id === data.variantId);
-        if (!selectedVariant) {
-          throw new NotFoundException('Biến thể sản phẩm không tồn tại');
-        }
-        selectedPrice = selectedVariant.price;
-
-        if (data.quantity > selectedVariant.quantity) {
-          throw new BadRequestException(
-            `Số lượng yêu cầu vượt quá số lượng tồn kho (${selectedVariant.quantity})`,
-          );
-        }
+      if (productVariant.quantity < data.quantity) {
+        throw new BadRequestException(
+          `Số lượng sản phẩm còn lại không đủ!`,
+        );
       }
 
       let cart = await prisma.cart.findUnique({
@@ -212,8 +156,7 @@ export class CartService {
       const existingItem = await prisma.cartItem.findFirst({
         where: {
           cartId: cart.id,
-          productId: data.productId,
-          ...(selectedVariant ? { variantId: selectedVariant.id } : {}),
+          variantId: data.variantId
         },
       });
 
@@ -222,32 +165,32 @@ export class CartService {
           where: { id: existingItem.id },
           data: {
             quantity: existingItem.quantity + data.quantity,
-            selectedPrice: selectedPrice,
           },
           include: {
-            product: {
+            variant: {
               include: {
-                store: true,
-                variants: true,
+                product: true,
               },
             },
           },
         });
         return this.mapCartItemToResponse(updatedItem);
-      } else {
+      } 
+      else {
         const newItem = await prisma.cartItem.create({
           data: {
             cartId: cart.id,
-            productId: data.productId,
-            variantId: selectedVariant?.id,
-            selectedPrice: selectedPrice,
+            variantId: data.variantId,
             quantity: data.quantity,
           },
           include: {
-            product: {
+           variant: {
               include: {
-                store: true,
-                variants: true,
+                product: {
+                  include: {
+                    store: true,
+                  },
+                }
               },
             },
           },
@@ -260,68 +203,61 @@ export class CartService {
   async updateCartItem(
     userId: string,
     data: UpdateCartItemDto,
-  ): Promise<AddCartItemResponseDto> {
+  ): Promise<CartItemResponseDto> {
     return this.prisma.$transaction(async (prisma) => {
       const cart = await prisma.cart.findUnique({
         where: { userId },
         include: {
-          items: true,
+          items: {
+            include: {
+              variant: {
+                include: {
+                  product: true,
+                },
+              },
+            },
+          }
         },
       });
 
       if (!cart) {
-        throw new NotFoundException('Cart not found');
+        throw new NotFoundException('Giỏ hàng không tồn tại');
       }
 
-      const cartItem = cart.items.find((item) => item.id === data.cartItemId);
+      const cartItem = cart?.items.find(item => item.id === data.cartItemId);
+
       if (!cartItem) {
-        throw new NotFoundException('Cart item not found');
+        throw new NotFoundException('Item trong giỏ hàng không tồn tại');
       }
 
-      let selectedPrice = cartItem.selectedPrice;
-      let variantId = cartItem.variantId;
+      if (!cartItem.variant) {
+        throw new NotFoundException('Biến thể sản phẩm không tồn tại');
+      }
 
-      if (data.variantId && data.variantId !== cartItem.variantId) {
-        const product = await prisma.product.findUnique({
-          where: { id: cartItem.productId },
-          include: { variants: true },
-        });
+      if (!cartItem.variant.product) {
+        throw new NotFoundException('Sản phẩm không tồn tại');
+      }
 
-        if (!product) {
-          throw new NotFoundException('Sản phẩm không tồn tại');
-        }
-
-        const newVariant = product.variants.find(
-          (v) => v.id === data.variantId,
+      if (data.quantity > cartItem.variant.quantity) {
+        throw new BadRequestException(
+          `Số lượng sản phẩm còn lại không đủ!`,
         );
-        if (!newVariant) {
-          throw new NotFoundException('Biến thể sản phẩm không tồn tại');
-        }
-
-        if (data.quantity > newVariant.quantity) {
-          throw new BadRequestException(
-            `Số lượng yêu cầu vượt quá số lượng tồn kho (${newVariant.quantity})`,
-          );
-        }
-
-        selectedPrice = newVariant.price;
-        variantId = newVariant.id;
       }
-
       const updatedItem = await prisma.cartItem.update({
         where: { id: data.cartItemId },
         data: {
           quantity: data.quantity,
-          variantId: variantId,
-          selectedPrice: selectedPrice,
         },
         include: {
-          product: {
+          variant: {
             include: {
-              store: true,
-              variants: true,
+              product: {
+                include: {
+                  store: true,
+                },
+              },
             },
-          },
+          }
         },
       });
       return this.mapCartItemToResponse(updatedItem);
@@ -376,10 +312,9 @@ export class CartService {
       include: {
         items: {
           include: {
-            product: {
+            variant: {
               include: {
-                variants: true,
-                store: true,
+                product: true,
               },
             },
           },
@@ -388,53 +323,5 @@ export class CartService {
     });
 
     return this.mapCartToResponse(updatedCart);
-  }
-
-  async updateCart(
-    userId: string,
-    data: UpdateCartDto,
-  ): Promise<CartResponseDto> {
-    const cart = await this.prisma.cart.findUnique({
-      where: { userId },
-    });
-
-    if (!cart) {
-      throw new NotFoundException('Cart not found');
-    }
-
-    const updatedCart = await this.prisma.cart.update({
-      where: { id: cart.id },
-      data: {
-        metadata: data.metadata as Prisma.JsonObject,
-      },
-      include: {
-        items: {
-          include: {
-            product: {
-              include: {
-                variants: true,
-                store: true,
-              },
-            },
-          },
-        },
-      },
-    });
-    return this.mapCartToResponse(updatedCart);
-  }
-
-  async getCartItemCount(userId: string): Promise<number> {
-    const cart = await this.prisma.cart.findUnique({
-      where: { userId },
-      include: {
-        items: true,
-      },
-    });
-
-    if (!cart) {
-      return 0;
-    }
-
-    return cart.items.reduce((total, item) => total + item.quantity, 0);
   }
 }

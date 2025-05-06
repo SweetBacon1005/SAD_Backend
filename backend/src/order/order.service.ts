@@ -116,11 +116,11 @@ export class OrderService {
         include: {
           items: {
             include: {
-              product: {
+              variant: {
                 include: {
-                  variants: true,
+                  product: true,
                 },
-              },
+              }
             },
           },
         },

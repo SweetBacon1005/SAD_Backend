@@ -58,13 +58,16 @@ export class ProductService {
     };
   }
 
-  private mapProductsToResponse(products: any[]): ProductResponseDto[] {
-    return products.map(this.mapProductToResponse);
-  }
-
   async getRecommendProducts(
     user_id: string,
   ): Promise<RecommendProductsResponseDto> {
+    if (!user_id) {
+      return {
+        recommends: [],
+        populars: [],
+      };
+    }
+
     try {
       const response = await axios.get(
         `http://127.0.0.1:5000/recommend?user_id=${user_id}`,
@@ -109,7 +112,7 @@ export class ProductService {
         ),
       };
     } catch (error) {
-      console.error('Error fetching recommended products:', error);
+      console.error('Error fetching recommended products');
     }
     return {
       recommends: [],
@@ -254,7 +257,7 @@ export class ProductService {
         };
       }
     } catch (error) {
-      console.error('Error fetching similar products:', error);
+      console.error('Error fetching similar products');
     }
 
     return {
