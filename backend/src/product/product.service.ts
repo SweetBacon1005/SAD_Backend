@@ -35,6 +35,29 @@ export class ProductService {
     };
   }
 
+  private mapProductWithVoucherToResponse(product: any, vouchers: any[]): ProductResponseDto {
+    const relatedVouchers = vouchers.filter((v) =>
+      v.conditions.productIds.includes(product.id),
+    );
+
+    const bestVoucher = relatedVouchers.reduce((max, v) => {
+      return !max || v.discountValue > max.discountValue ? v : max;
+    }, null);
+
+    const discountValue = bestVoucher ? bestVoucher.discountValue : 0;
+
+    return {
+      ...product,
+      variants: product.variants?.map((variant) => ({
+        ...variant,
+        attributes: variant.attributes
+          ? JSON.parse(JSON.stringify(variant.attributes))
+          : null,
+      })),
+      discount: discountValue,
+    };
+  }
+
   private mapProductsToResponse(products: any[]): ProductResponseDto[] {
     return products.map(this.mapProductToResponse);
   }
@@ -67,9 +90,23 @@ export class ProductService {
           : Promise.resolve([]),
       ]);
 
+      const currentDate = new Date();
+      const vouchers = await this.prisma.voucher.findMany({
+        where: {
+          isActive: true,
+          startDate: { lte: currentDate },
+          endDate: { gte: currentDate },
+          applicableFor: "SPECIFIC_PRODUCTS",
+        },
+      });
+
       return {
-        recommends: this.mapProductsToResponse(recommends),
-        populars: this.mapProductsToResponse(populars),
+        recommends: recommends.map((product) =>
+          this.mapProductWithVoucherToResponse(product, vouchers),
+        ),
+        populars: populars.map((product) =>
+          this.mapProductWithVoucherToResponse(product, vouchers),
+        ),
       };
     } catch (error) {
       console.error('Error fetching recommended products:', error);
@@ -118,7 +155,20 @@ export class ProductService {
 
   async getAllProducts() {
     const products = await this.prisma.product.findMany();
-    return this.mapProductsToResponse(products);
+
+    const currentDate = new Date();
+    const vouchers = await this.prisma.voucher.findMany({
+      where: {
+        isActive: true,
+        startDate: { lte: currentDate },
+        endDate: { gte: currentDate },
+        applicableFor: "SPECIFIC_PRODUCTS",
+      },
+    });
+
+    return products.map((product) =>
+      this.mapProductWithVoucherToResponse(product, vouchers),
+    );
   }
 
   async getProducts(payload: GetProductsDto): Promise<GetProductsResponseDto> {
@@ -135,11 +185,23 @@ export class ProductService {
       }),
     ]);
 
+    const currentDate = new Date();
+    const vouchers = await this.prisma.voucher.findMany({
+      where: {
+        isActive: true,
+        startDate: { lte: currentDate },
+        endDate: { gte: currentDate },
+        applicableFor: "SPECIFIC_PRODUCTS",
+      },
+    });
+
     return {
       currentPage,
       totalPages: Math.ceil(total / pageSize),
       total,
-      data: this.mapProductsToResponse(products),
+      data: products.map((product) =>
+        this.mapProductWithVoucherToResponse(product, vouchers),
+      ),
     };
   }
 
@@ -156,6 +218,16 @@ export class ProductService {
     if (!product) {
       throw new NotFoundException('Product not found');
     }
+
+    const currentDate = new Date();
+    const vouchers = await this.prisma.voucher.findMany({
+      where: {
+        isActive: true,
+        startDate: { lte: currentDate },
+        endDate: { gte: currentDate },
+        applicableFor: "SPECIFIC_PRODUCTS",
+      },
+    });
 
     try {
       const response = await axios.get(
@@ -174,9 +246,11 @@ export class ProductService {
           },
         });
         return {
-          ...this.mapProductToResponse(product),
+          ...this.mapProductWithVoucherToResponse(product, vouchers),
           reviews: product.reviews,
-          similars: similars.map(this.mapProductToResponse),
+          similars: similars.map((similarProduct) =>
+            this.mapProductWithVoucherToResponse(similarProduct, vouchers),
+          ),
         };
       }
     } catch (error) {
@@ -184,49 +258,9 @@ export class ProductService {
     }
 
     return {
-      ...this.mapProductToResponse(product),
+      ...this.mapProductWithVoucherToResponse(product, vouchers),
       reviews: product.reviews,
     };
-  }
-
-  async updateProduct(
-    id: string,
-    data: UpdateProductDto,
-  ): Promise<ProductResponseDto> {
-    try {
-      const product = await this.prisma.product.update({
-        where: { id },
-        data: {
-          ...(data.name && { name: data.name }),
-          ...(data.description && { description: data.description }),
-          ...(data.basePrice !== undefined && { basePrice: data.basePrice }),
-          ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
-          ...(data.storeId && { storeId: data.storeId }),
-          ...(data.images && { images: data.images }),
-          ...(data.options && {
-            options: data.options as Prisma.JsonObject,
-          }),
-        },
-        include: {
-          variants: true,
-          category: true,
-        },
-      });
-
-      return this.mapProductToResponse(product);
-    } catch (error) {
-      throw new BadRequestException('Failed to update product');
-    }
-  }
-
-  async deleteProduct(id: string) {
-    try {
-      return await this.prisma.product.delete({
-        where: { id },
-      });
-    } catch (error) {
-      throw new NotFoundException('Product not found');
-    }
   }
 
   async searchProducts(
@@ -242,8 +276,27 @@ export class ProductService {
     const sortOrder = payload?.sortOrder;
     const minPrice = payload.minPrice;
     const maxPrice = payload.maxPrice;
+    const haveDiscount = payload.haveDiscount || false;
+
+    const currentDate = new Date();
+    const vouchers = await this.prisma.voucher.findMany({
+      where: {
+        isActive: true,
+        startDate: { lte: currentDate },
+        endDate: { gte: currentDate },
+        applicableFor: "SPECIFIC_PRODUCTS",
+      },
+    });
 
     const where: Prisma.ProductWhereInput = {};
+
+    if(haveDiscount) {
+      where.id = {
+        in: vouchers.flatMap((voucher) => 
+          (voucher.conditions as { productIds?: any[] })?.productIds || []
+        ),
+      };
+    }
 
     if (query) {
       where.OR = [{ name: { contains: query, mode: 'insensitive' } }];
@@ -274,32 +327,41 @@ export class ProductService {
       };
     }
 
-    let orderBy: Prisma.ProductOrderByWithRelationInput = { createdAt: 'desc' };
-    if (sortBy && sortOrder) {
-      orderBy = {
-        [sortBy === 'price' ? 'basePrice' : 'createdAt']: sortOrder,
-      } as Prisma.ProductOrderByWithRelationInput;
-    }
-
     const [total, products] = await Promise.all([
       this.prisma.product.count({ where }),
       this.prisma.product.findMany({
         where,
-        skip,
-        take: pageSize,
         include: {
           variants: true,
           category: true,
         },
-        orderBy,
+        orderBy: sortBy === 'createdAt' ? { createdAt: sortOrder }: { createdAt: "desc" },
       }),
     ]);
+
+    let data = products.map((product) =>
+      this.mapProductWithVoucherToResponse(product, vouchers),
+    );
+
+    if (sortBy === 'price' && sortOrder) {
+      data.sort((a, b) => {
+        const discountA = a.discount || 0;
+        const priceA = a.basePrice * (1 - discountA / 100);
+
+        const discountB = b.discount || 0;
+        const priceB = b.basePrice * (1 - discountB / 100);
+    
+        return sortOrder === 'asc' ? priceA - priceB : priceB - priceA;
+      });
+    }
+
+    data = data.slice(skip, skip + pageSize);
 
     return {
       currentPage,
       totalPages: Math.ceil(total / pageSize),
       total,
-      data: this.mapProductsToResponse(products),
+      data,
     };
   }
 
@@ -563,5 +625,45 @@ export class ProductService {
       totalPages,
       total,
     };
+  }
+
+  async updateProduct(
+    id: string,
+    data: UpdateProductDto,
+  ): Promise<ProductResponseDto> {
+    try {
+      const product = await this.prisma.product.update({
+        where: { id },
+        data: {
+          ...(data.name && { name: data.name }),
+          ...(data.description && { description: data.description }),
+          ...(data.basePrice !== undefined && { basePrice: data.basePrice }),
+          ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
+          ...(data.storeId && { storeId: data.storeId }),
+          ...(data.images && { images: data.images }),
+          ...(data.options && {
+            options: data.options as Prisma.JsonObject,
+          }),
+        },
+        include: {
+          variants: true,
+          category: true,
+        },
+      });
+
+      return this.mapProductToResponse(product);
+    } catch (error) {
+      throw new BadRequestException('Failed to update product');
+    }
+  }
+
+  async deleteProduct(id: string) {
+    try {
+      return await this.prisma.product.delete({
+        where: { id },
+      });
+    } catch (error) {
+      throw new NotFoundException('Product not found');
+    }
   }
 }

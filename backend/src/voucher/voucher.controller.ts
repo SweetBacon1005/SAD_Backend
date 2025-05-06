@@ -1,4 +1,5 @@
 import { Roles } from '@/common/decorators/role.decorator';
+import { Public } from '@/common/decorators/public.decorator';
 import {
   Body,
   Controller,
@@ -9,6 +10,7 @@ import {
   Put,
   Query,
   Req,
+
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
