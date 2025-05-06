@@ -230,6 +230,8 @@ model Wishlist {
   product     Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime?      @updatedAt
+
+  @@unique([userId, productId])
 }
 
 model Review {

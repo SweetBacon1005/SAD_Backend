@@ -148,7 +148,9 @@ export class WishlistService {
   
   async addItem( userId: string, addItemDto: AddWishlistItemDto): Promise<any> {
     const wishlist = await this.prisma.wishlist.findUnique({
-      where: { userId: userId, productId: addItemDto.productId },
+      where: { userId_productId: {
+        userId: userId, productId: addItemDto.productId 
+      }},
     });
     
     if (wishlist) {
@@ -183,7 +185,7 @@ export class WishlistService {
 
   async removeItem(userId: string, productId: string): Promise<any> {
     const wishlist = await this.prisma.wishlist.findUnique({
-      where: { userId: userId, productId: productId },
+      where: { userId_productId:{ userId: userId, productId: productId }},
     });
 
     if (!wishlist) {
