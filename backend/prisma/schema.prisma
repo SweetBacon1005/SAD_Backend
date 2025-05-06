@@ -22,7 +22,7 @@ model User {
   passwordResetOTPExpires     DateTime?
   createdAt                   DateTime  @default(now())
   updatedAt                   DateTime? @updatedAt
-  wishlist                    Wishlist?
+  wishlist                    Wishlist[]
   cart                        Cart?
   orders                      Order[]
   reviews                     Review[]
@@ -224,9 +224,9 @@ model Payment {
 
 model Wishlist {
   id          String         @id @default(auto()) @map("_id") @db.ObjectId
-  userId      String         @unique @db.ObjectId
+  userId      String         @db.ObjectId
   user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  productId   String         @unique @db.ObjectId
+  productId   String         @db.ObjectId
   product     Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime?      @updatedAt

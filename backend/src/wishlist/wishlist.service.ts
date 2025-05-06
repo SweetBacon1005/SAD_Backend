@@ -36,7 +36,7 @@ export class WishlistService {
     return wishlist.map(this.mapToWishlistResponseDto);
   }
 
-  async search(
+  async searchWishlist(
     userId: string,
     filter: WishlistFilterDto = {},
   ): Promise<any> {

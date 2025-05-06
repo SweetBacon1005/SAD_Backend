@@ -56,7 +56,7 @@ export class WishlistController {
     @Body() filter: WishlistFilterDto,
   ): Promise<any> {
     const userId = req['user'].id;
-    const result = await this.wishlistService.search(userId, filter);
+    const result = await this.wishlistService.searchWishlist(userId, filter);
     return result;
   }
 
