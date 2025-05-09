@@ -21,6 +21,7 @@ import {
 import { CreateOrderDto } from './dto/order.dto';
 import { PagedResponseDto, PaginationDto } from './dto/pagination.dto';
 import { NotificationGateway } from '@/notification/notification.gateway';
+import { get } from 'http';
 
 interface ProductVariant {
   id: string;
@@ -67,6 +68,18 @@ export class OrderService {
         `Phương thức thanh toán ${paymentMethod} chưa được hỗ trợ. Các phương thức được hỗ trợ: ${supportedPaymentMethods.join(', ')}`,
       );
     }
+  }
+
+  private getBestDiscount(productId: any, vouchers: any[]): number {
+    const relatedVouchers = vouchers.filter((v) =>
+      v?.conditions?.productIds.includes(productId),
+    );
+
+    const bestVoucher = relatedVouchers.reduce((max, v) => {
+      return !max || v.discountValue > max?.discountValue ? v : max;
+    }, null);
+
+    return bestVoucher ? bestVoucher.discountValue : 0;
   }
 
   async checkVoucher(
@@ -130,6 +143,16 @@ export class OrderService {
         ? new Map(cart.items.map((item) => [item.id, item]))
         : new Map();
 
+      const currentDate = new Date();
+      const vouchers = await this.prisma.voucher.findMany({
+        where: {
+          isActive: true,
+          startDate: { lte: currentDate },
+          endDate: { gte: currentDate },
+          applicableFor: "SPECIFIC_PRODUCTS",
+        },
+      });
+
       const productsToCheck = await Promise.all(
         payload.items.map(async (item) => {
           // Trường hợp 1: Có cartItemId
@@ -141,39 +164,33 @@ export class OrderService {
               );
             }
 
-            const product = cartItem.product;
-            let selectedVariant: ProductVariant | null = null;
+            const variant = cartItem.variant;
 
-            if (cartItem.variantId) {
-              selectedVariant =
-                product.variants.find((v) => v.id === cartItem.variantId) ||
-                null;
+            if (!variant) {
+              throw new NotFoundException(
+                `Không tìm thấy biến thể với ID ${cartItem.variantId} cho sản phẩm ${cartItem.productId}`,
+              );
+            }
 
-              if (!selectedVariant) {
-                throw new NotFoundException(
-                  `Không tìm thấy biến thể với ID ${cartItem.variantId} cho sản phẩm ${product.name}`,
-                );
-              }
-
-              if (selectedVariant.quantity < item.quantity) {
-                throw new BadRequestException(
-                  `Số lượng biến thể của sản phẩm ${product.name} không đủ. Hiện có: ${selectedVariant.quantity}, Yêu cầu: ${item.quantity}`,
-                );
-              }
-            } else if (
-              (product as any).quantity &&
-              (product as any).quantity < item.quantity
-            ) {
+            if (variant.quantity < item.quantity) {
               throw new BadRequestException(
-                `Số lượng sản phẩm ${product.name} không đủ. Hiện có: ${(product as any).quantity}, Yêu cầu: ${item.quantity}`,
+                `Số lượng biến thể của sản phẩm không đủ. Hiện có: ${variant.quantity}, Yêu cầu: ${item.quantity}`,
+              );
+            }
+
+            const product = variant.product as Product;
+
+            if (!product) {
+              throw new NotFoundException(
+                `Không tìm thấy sản phẩm với ID`,
               );
             }
 
             return {
-              product,
+              product: {...product, discount: this.getBestDiscount(product.id, vouchers)},
               cartItem,
-              requestedQty: item.quantity,
-              selectedVariant,
+              quantity: item.quantity,
+              selectedVariant: variant,
             };
           } else if (!item.productId && !item.variantId) {
             throw new BadRequestException(
@@ -181,47 +198,33 @@ export class OrderService {
             );
           } else {
             // Trường hợp 2: Chỉ có productId và variantId (tùy chọn)
-
-            const product = await prisma.product.findUnique({
-              where: { id: item.productId },
-              include: { variants: true },
+            const variant = await prisma.productVariant.findUnique({
+              where: { id: item.variantId },
+              include: { product: true },
             });
 
-            if (!product) {
+            if (!variant) {
+              throw new NotFoundException(
+                `Không tìm thấy biến thể với ID ${item.variantId}`,
+              );
+            }
+
+            if (!variant?.product) {
               throw new NotFoundException(
                 `Không tìm thấy sản phẩm với ID ${item.productId}`,
               );
             }
 
-            let selectedVariant: ProductVariant | null = null;
-            if (item.variantId) {
-              selectedVariant =
-                product.variants.find((v) => v.id === item.variantId) || null;
-
-              if (!selectedVariant) {
-                throw new NotFoundException(
-                  `Không tìm thấy biến thể với ID ${item.variantId} cho sản phẩm ${item.productId}`,
-                );
-              }
-
-              if (selectedVariant.quantity < item.quantity) {
-                throw new BadRequestException(
-                  `Số lượng biến thể của sản phẩm ${product.name} không đủ. Hiện có: ${selectedVariant.quantity}, Yêu cầu: ${item.quantity}`,
-                );
-              }
-            } else if (
-              (product as any).quantity &&
-              (product as any).quantity < item.quantity
-            ) {
+            if (variant.quantity < item.quantity) {
               throw new BadRequestException(
-                `Số lượng sản phẩm ${product.name} không đủ. Hiện có: ${(product as any).quantity}, Yêu cầu: ${item.quantity}`,
+                `Số lượng biến thể của sản phẩm không đủ. Hiện có: ${variant.quantity}, Yêu cầu: ${item.quantity}`,
               );
             }
 
             return {
-              product,
-              requestedQty: item.quantity,
-              selectedVariant,
+              product: {...variant.product, discount: this.getBestDiscount(variant.product.id, vouchers)},
+              quantity: item.quantity,
+              selectedVariant: variant,
             };
           }
         }),
@@ -238,19 +241,8 @@ export class OrderService {
 
         const product = productInfo?.product;
         const selectedVariant = productInfo?.selectedVariant;
-        const cartItem = productInfo?.cartItem;
-
         const quantity = item.quantity || 1;
-
-        let price;
-        if (cartItem) {
-          price = cartItem.selectedPrice;
-        } else {
-          price = selectedVariant
-            ? selectedVariant.price
-            : product?.basePrice || 0;
-        }
-
+        const price = selectedVariant.price * (1 - (productInfo?.product.discount || 0) / 100);
         subtotal += price * quantity;
 
         return {
@@ -314,7 +306,9 @@ export class OrderService {
 
       const order = await prisma.order.create({
         data: {
-          userId,
+          user: {
+            connect: { id: userId },
+          },
           subtotal,
           total,
           discountAmount,
@@ -323,7 +317,10 @@ export class OrderService {
           paymentStatus: PaymentStatus.PENDING,
           paymentMethod: payload.paymentMethod,
           notes: payload.notes,
-          shippingInfoId: shippingInfo.id,
+          shippingInfo: {
+            connect: { id: shippingInfo.id },
+          },
+
           items: {
             create: orderItems,
           },
@@ -370,23 +367,7 @@ export class OrderService {
                 quantity: { decrement: quantity },
               },
             });
-          } else {
-            const product = productInfo?.product as any;
-            if (
-              product &&
-              product.quantity !== undefined &&
-              product.quantity !== null
-            ) {
-              await prisma.product.update({
-                where: { id: product.id },
-                data: {
-                  quantity: {
-                    decrement: quantity,
-                  },
-                },
-              });
-            }
-          }
+          } 
         }),
       );
 

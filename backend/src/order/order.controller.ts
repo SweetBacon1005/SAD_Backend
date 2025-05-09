@@ -209,11 +209,11 @@ export class OrderController {
     @Body() createOrderDto: CreateOrderDto,
   ): Promise<OrderResponseDto> {
     const user = req.user as RequestUser;
-    if (!createOrderDto.items.some((item) => item.cartItemId)) {
-      throw new BadRequestException(
-        'Cần cung cấp ít nhất một cartItemId để đặt hàng từ giỏ hàng',
-      );
-    }
+    // if (!createOrderDto.items.some((item) => item.cartItemId)) {
+    //   throw new BadRequestException(
+    //     'Cần cung cấp ít nhất một cartItemId để đặt hàng từ giỏ hàng',
+    //   );
+    // }
     return this.orderService.createOrder(user.id, createOrderDto);
   }
 
