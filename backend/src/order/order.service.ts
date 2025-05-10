@@ -1,3 +1,4 @@
+import { NotificationGateway } from '@/notification/notification.gateway';
 import {
   BadRequestException,
   Injectable,
@@ -10,7 +11,6 @@ import {
   TransactionStatus,
 } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
-import { NotificationService } from '../notification/notification.service';
 import { VoucherService } from '../voucher/voucher.service';
 import {
   CancelOrderResponseDto,
@@ -18,10 +18,11 @@ import {
   OrderStatusResponseDto,
   PaymentStatusResponseDto,
 } from './dto/order-response.dto';
-import { CreateOrderDto } from './dto/order.dto';
-import { PagedResponseDto, PaginationDto } from './dto/pagination.dto';
-import { NotificationGateway } from '@/notification/notification.gateway';
-import { get } from 'http';
+import {
+  CreateOrderDto,
+  GetAllOrderDto,
+  GetAllOrderResponseDto,
+} from './dto/order.dto';
 
 interface ProductVariant {
   id: string;
@@ -60,7 +61,6 @@ export class OrderService {
       throw new BadRequestException('Phương thức thanh toán không hợp lệ');
     }
 
-    // Kiểm tra các phương thức thanh toán đang được hỗ trợ
     const supportedPaymentMethods = [PaymentMethod.COD, PaymentMethod.VNPAY];
 
     if (!supportedPaymentMethods.includes(paymentMethod)) {
@@ -120,7 +120,6 @@ export class OrderService {
     userId: string,
     payload: CreateOrderDto,
   ): Promise<OrderResponseDto> {
-    // Validate payment method
     this.validatePaymentMethod(payload.paymentMethod);
 
     return this.prisma.$transaction(async (prisma) => {
@@ -133,7 +132,7 @@ export class OrderService {
                 include: {
                   product: true,
                 },
-              }
+              },
             },
           },
         },
@@ -149,7 +148,7 @@ export class OrderService {
           isActive: true,
           startDate: { lte: currentDate },
           endDate: { gte: currentDate },
-          applicableFor: "SPECIFIC_PRODUCTS",
+          applicableFor: 'SPECIFIC_PRODUCTS',
         },
       });
 
@@ -181,13 +180,14 @@ export class OrderService {
             const product = variant.product as Product;
 
             if (!product) {
-              throw new NotFoundException(
-                `Không tìm thấy sản phẩm với ID`,
-              );
+              throw new NotFoundException(`Không tìm thấy sản phẩm với ID`);
             }
 
             return {
-              product: {...product, discount: this.getBestDiscount(product.id, vouchers)},
+              product: {
+                ...product,
+                discount: this.getBestDiscount(product.id, vouchers),
+              },
               cartItem,
               quantity: item.quantity,
               selectedVariant: variant,
@@ -222,7 +222,10 @@ export class OrderService {
             }
 
             return {
-              product: {...variant.product, discount: this.getBestDiscount(variant.product.id, vouchers)},
+              product: {
+                ...variant.product,
+                discount: this.getBestDiscount(variant.product.id, vouchers),
+              },
               quantity: item.quantity,
               selectedVariant: variant,
             };
@@ -242,7 +245,9 @@ export class OrderService {
         const product = productInfo?.product;
         const selectedVariant = productInfo?.selectedVariant;
         const quantity = item.quantity || 1;
-        const price = selectedVariant.price * (1 - (productInfo?.product.discount || 0) / 100);
+        const price =
+          selectedVariant.price *
+          (1 - (productInfo?.product.discount || 0) / 100);
         subtotal += price * quantity;
 
         return {
@@ -367,7 +372,7 @@ export class OrderService {
                 quantity: { decrement: quantity },
               },
             });
-          } 
+          }
         }),
       );
 
@@ -391,8 +396,8 @@ export class OrderService {
   }
 
   async getAllOrders(
-    payload: PaginationDto,
-  ): Promise<PagedResponseDto<OrderResponseDto>> {
+    payload: GetAllOrderDto,
+  ): Promise<GetAllOrderResponseDto<OrderResponseDto>> {
     const page = Number(payload.currentPage) || 1;
     const limit = Number(payload.pageSize) || 10;
     const skip = (page - 1) * limit;
@@ -436,8 +441,8 @@ export class OrderService {
 
   async getUserOrders(
     userId: string,
-    payload: PaginationDto,
-  ): Promise<PagedResponseDto<OrderResponseDto>> {
+    payload: GetAllOrderDto,
+  ): Promise<GetAllOrderResponseDto<OrderResponseDto>> {
     const page = Number(payload.currentPage) || 1;
     const limit = Number(payload.pageSize) || 10;
     const skip = (page - 1) * limit;
@@ -639,10 +644,13 @@ export class OrderService {
     };
   }
 
-  async cancelOrder(id: string): Promise<CancelOrderResponseDto> {
+  async cancelOrder(
+    id: string,
+    userId: string,
+  ): Promise<CancelOrderResponseDto> {
     return this.prisma.$transaction(async (prisma) => {
       const order = await prisma.order.findUnique({
-        where: { id },
+        where: { id, userId },
         include: {
           items: true,
           user: true,
