@@ -17,6 +17,9 @@ class ProductDto {
 
   @ApiPropertyOptional({ description: 'Hình ảnh sản phẩm', example: 'image.jpg' })
   image: string | null;
+
+  @ApiPropertyOptional({ description: 'Giá gốc', example: 100000 })
+  basePrice: number;
 }
 
 export class ReviewResponseDto {
@@ -34,9 +37,6 @@ export class ReviewResponseDto {
 
   @ApiPropertyOptional({ description: 'Danh sách hình ảnh kèm theo đánh giá', type: [String], example: ['url1.jpg', 'url2.jpg'] })
   images: string[];
-
-  @ApiProperty({ description: 'Trạng thái hiển thị', example: true })
-  isPublished: boolean;
 
   @ApiPropertyOptional({ description: 'Thông tin người dùng', type: UserDto })
   user?: UserDto;

@@ -42,7 +42,7 @@ export class CartController {
   })
   async getCart(@Req() req: Request): Promise<CartResponseDto> {
     const { id } = req['user'];
-
+    
     return this.cartService.getCartByUserId(id);
   }
 

@@ -1,18 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsArray, IsOptional, IsString } from 'class-validator';
 
 export class UpdateReviewDto {
-  @ApiPropertyOptional({
-    description: 'Đánh giá sao (1-5)',
-    example: 5,
-    minimum: 1,
-    maximum: 5,
-  })
-  @IsOptional()
-  @IsInt({ message: 'Đánh giá sao phải là số nguyên' })
-  @Min(1, { message: 'Đánh giá sao tối thiểu là 1' })
-  @Max(5, { message: 'Đánh giá sao tối đa là 5' })
-  rating?: number;
 
   @ApiPropertyOptional({
     description: 'Tiêu đề đánh giá',

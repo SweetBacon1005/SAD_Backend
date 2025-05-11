@@ -190,7 +190,7 @@ export class OrderController {
   }
 
   @Put(':id/status')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.CUSTOMER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Cập nhật trạng thái đơn hàng (Admin)' })
   @ApiParam({ name: 'id', description: 'ID đơn hàng' })
   @ApiBody({
@@ -220,8 +220,10 @@ export class OrderController {
   async updateOrderStatus(
     @Param('id') id: string,
     @Body('status') status: OrderStatus,
+    @Req() req: Request,
   ): Promise<OrderStatusResponseDto> {
-    return this.orderService.updateOrderStatus(id, status);
+    const { role, id: userId } = req['user'];
+    return this.orderService.updateOrderStatus(id, status, role, userId);
   }
 
   @Put(':id/payment')

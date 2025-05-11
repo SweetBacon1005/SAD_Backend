@@ -1,6 +1,7 @@
 import { NotificationGateway } from '@/notification/notification.gateway';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -9,6 +10,7 @@ import {
   PaymentMethod,
   PaymentStatus,
   TransactionStatus,
+  UserRole,
 } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { VoucherService } from '../voucher/voucher.service';
@@ -443,9 +445,9 @@ export class OrderService {
     userId: string,
     payload: GetAllOrderDto,
   ): Promise<GetAllOrderResponseDto<OrderResponseDto>> {
-    const page = Number(payload.currentPage) || 1;
-    const limit = Number(payload.pageSize) || 10;
-    const skip = (page - 1) * limit;
+    const currentPage = Number(payload.currentPage) || 1;
+    const pageSize = Number(payload.pageSize) || 10;
+    const skip = (currentPage - 1) * pageSize;
 
     const [orders, totalItems] = await Promise.all([
       this.prisma.order.findMany({
@@ -463,18 +465,18 @@ export class OrderService {
           createdAt: 'desc',
         },
         skip,
-        take: limit,
+        take: pageSize,
       }),
       this.prisma.order.count({
         where: { userId },
       }),
     ]);
 
-    const totalPages = Math.ceil(totalItems / limit);
+    const totalPages = Math.ceil(totalItems / pageSize);
 
     return {
       data: orders as unknown as OrderResponseDto[],
-      currentPage: page,
+      currentPage: currentPage,
       totalPages,
       total: totalItems,
     };
@@ -511,6 +513,8 @@ export class OrderService {
   async updateOrderStatus(
     id: string,
     status: OrderStatus,
+    role: UserRole,
+    userId: string,
   ): Promise<OrderStatusResponseDto> {
     const order = await this.prisma.order.findUnique({
       where: { id },
@@ -521,27 +525,31 @@ export class OrderService {
     });
 
     if (!order) {
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException('Không tìm thấy đơn hàng');
     }
 
-    if (
-      order.status === OrderStatus.CANCELLED &&
-      status !== OrderStatus.CANCELLED
-    ) {
-      throw new BadRequestException(
-        'Cannot change status of a cancelled order',
-      );
+    if (role !== UserRole.ADMIN && order.userId !== userId) {
+      throw new ForbiddenException('Bạn không có quyền thay đổi trạng thái đơn hàng');
     }
 
-    if (
-      order.status === OrderStatus.DELIVERED &&
-      status !== OrderStatus.DELIVERED &&
-      status !== OrderStatus.CANCELLED
-    ) {
-      throw new BadRequestException(
-        'Cannot change status of a delivered order except to cancelled',
-      );
-    }
+    // if (
+    //   order.status === OrderStatus.CANCELLED &&
+    //   status !== OrderStatus.CANCELLED
+    // ) {
+    //   throw new BadRequestException(
+    //     'Không thể thay đổi trạng thái đơn hàng đã bị hủy',
+    //   );
+    // }
+
+    // if (
+    //   order.status === OrderStatus.DELIVERED &&
+    //   status !== OrderStatus.DELIVERED &&
+    //   status !== OrderStatus.CANCELLED
+    // ) {
+    //   throw new BadRequestException(
+    //     'Không thể thay đổi trạng thái đơn hàng đã được giao',
+    //   );
+    // }
 
     let updateData: any = { status };
 

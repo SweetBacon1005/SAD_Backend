@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
 } from '@nestjs/common';
@@ -40,10 +41,11 @@ export class ReviewController {
     type: ReviewResponseDto,
   })
   create(
-    @Req() req,
-    @Body() createReviewDto: CreateReviewDto,
+    @Req() req: Request,
+    @Body() payload: CreateReviewDto,
   ): Promise<ReviewResponseDto> {
-    return this.reviewService.create(req.user.id, createReviewDto);
+    const { id } = req['user'];
+    return this.reviewService.create(id, payload);
   }
 
   @Get()
@@ -84,9 +86,9 @@ export class ReviewController {
     type: ReviewListResponseDto,
   })
   findAll(
-    @Query() filter: ReviewFilterDto,
+    @Query() payload: ReviewFilterDto,
   ): Promise<ReviewListResponseDto> {
-    return this.reviewService.findAll(filter);
+    return this.reviewService.findAll(payload);
   }
 
   @Get('user')
@@ -129,10 +131,11 @@ export class ReviewController {
     type: ReviewListResponseDto,
   })
   findUserReviews(
-    @Req() req,
-    @Query() filter: ReviewFilterDto
+    @Req() req: Request,
+    @Query() payload: ReviewFilterDto
   ): Promise<ReviewListResponseDto> {
-    return this.reviewService.findUserReviews(req.user.id, filter);
+    const { id } = req['user'];
+    return this.reviewService.findUserReviews(id, payload);
   }
 
   @Get(':id')
@@ -147,7 +150,7 @@ export class ReviewController {
     return this.reviewService.findOne(id);
   }
 
-  @Patch(':id')
+  @Put(':id')
   @Roles(UserRole.CUSTOMER)
   @ApiOperation({ summary: 'Cập nhật đánh giá' })
   @ApiParam({ name: 'id', description: 'ID của đánh giá' })
@@ -158,10 +161,11 @@ export class ReviewController {
   })
   update(
     @Param('id') id: string,
-    @Req() req,
-    @Body() updateReviewDto: UpdateReviewDto,
+    @Req() req: Request,
+    @Body() payload: UpdateReviewDto,
   ): Promise<ReviewResponseDto> {
-    return this.reviewService.update(id, req.user.id, updateReviewDto);
+    const { id: userId } = req['user'];
+    return this.reviewService.update(id, userId, payload);
   }
 
   @Delete(':id')
@@ -169,7 +173,8 @@ export class ReviewController {
   @ApiOperation({ summary: 'Xóa đánh giá' })
   @ApiParam({ name: 'id', description: 'ID của đánh giá' })
   @ApiResponse({ status: 200, description: 'Đánh giá đã được xóa' })
-  remove(@Param('id') id: string, @Req() req): Promise<void> {
-    return this.reviewService.remove(id, req.user.id);
+  remove(@Param('id') id: string, @Req() req: Request): Promise<void> {
+    const { id: userId } = req['user'];
+    return this.reviewService.remove(id, userId);
   }
 }

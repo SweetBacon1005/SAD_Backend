@@ -23,8 +23,8 @@ export class CartService {
       items: cart.items.map((item: any) =>
         this.mapCartItemToResponse(item, vouchers),
       ),
-      createdAt: cart.createdAt.toISOString(),
-      updatedAt: cart.updatedAt ? cart.updatedAt.toISOString() : null,
+      createdAt: cart.createdAt,
+      updatedAt: cart?.updatedAt,
     };
   }
 

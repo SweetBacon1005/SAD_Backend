@@ -109,8 +109,7 @@ export class CartResponseDto {
     description: 'Thời gian cập nhật giỏ hàng gần nhất',
     example: '2023-04-05T10:30:40.000Z',
   })
-  updatedAt: string;
-
+  updatedAt?: string| null;
 }
 
 export class ClearCartResponseDto extends CartResponseDto {}
