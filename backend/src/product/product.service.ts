@@ -185,6 +185,9 @@ export class ProductService {
         skip,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
+        include: {
+          reviews: true,
+        }
       }),
     ]);
 
@@ -246,6 +249,7 @@ export class ProductService {
           include: {
             variants: true,
             category: true,
+            reviews: true,
           },
         });
         return {
