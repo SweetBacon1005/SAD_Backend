@@ -7,7 +7,7 @@ import {
   Param,
   Patch,
   Post,
-  Req,
+  Request,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -40,9 +40,10 @@ export class CartController {
     description: 'Thông tin giỏ hàng và các sản phẩm trong giỏ',
     type: CartResponseDto,
   })
-  async getCart(@Req() req: Request): Promise<CartResponseDto> {
+  async getCart(@Request() req: Request): Promise<CartResponseDto> {
     const { id } = req['user'];
-    
+    console.log('id', id);
+
     return this.cartService.getCartByUserId(id);
   }
 
@@ -54,7 +55,7 @@ export class CartController {
     type: CartItemResponseDto,
   })
   async addItem(
-    @Req() req: Request,
+    @Request() req: Request,
     @Body() addCartItemDto: AddCartItemDto,
   ): Promise<CartItemResponseDto> {
     const { id } = req['user'];
@@ -69,7 +70,7 @@ export class CartController {
     type: CartItemResponseDto,
   })
   async updateItem(
-    @Req() req: Request,
+    @Request() req: Request,
     @Body() updateCartItemDto: UpdateCartItemDto,
   ): Promise<CartItemResponseDto> {
     const { id } = req['user'];
@@ -84,7 +85,7 @@ export class CartController {
     type: RemoveCartItemResponseDto,
   })
   async removeItem(
-    @Req() req: Request,
+    @Request() req: Request,
     @Param('cartItemId') cartItemId: string,
   ): Promise<RemoveCartItemResponseDto> {
     const { id } = req['user'];
@@ -102,7 +103,7 @@ export class CartController {
     description: 'Giỏ hàng đã được làm trống',
     type: ClearCartResponseDto,
   })
-  async clearCart(@Req() req: Request): Promise<ClearCartResponseDto> {
+  async clearCart(@Request() req: Request): Promise<ClearCartResponseDto> {
     const { id } = req['user'];
     return this.cartService.clearCart(id);
   }
