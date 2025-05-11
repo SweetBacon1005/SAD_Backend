@@ -371,13 +371,67 @@ export class PaymentService {
       },
     });
 
-    const transaction = order.payment?.transactions[0];
-    if (transaction) {
-      await this.prisma.paymentTransaction.update({
-        where: { id: transaction.id },
+    if (order.payment?.transactions && order.payment.transactions.length > 0) {
+      const transaction = order.payment.transactions[0];
+      
+      const existingTransaction = await this.prisma.paymentTransaction.findUnique({
+        where: { transactionId: vnpayResponse.transactionId },
+      });
+
+      if (existingTransaction && existingTransaction.id !== transaction.id && existingTransaction.paymentId !== order.payment.id) {
+        this.logger.warn(`Giao dịch VNPay với transactionId ${vnpayResponse.transactionId} đã tồn tại trong hệ thống cho một thanh toán khác.`);
+        
+        await this.prisma.paymentTransaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: transactionStatus,
+            providerData: {
+              bankCode: vnpayResponse.bankCode,
+              bankTranNo: vnpayResponse.bankTranNo,
+              cardType: vnpayResponse.cardType,
+              payDate: vnpayResponse.payDate,
+              responseCode: vnpayResponse.responseCode,
+              errorMessage: errorMessage,
+              isValidSignature: vnpayResponse.isValidSignature,
+            },
+            errorMessage:
+              transactionStatus === TransactionStatus.FAILED
+                ? errorMessage
+                : null,
+          },
+        });
+      } else {
+        await this.prisma.paymentTransaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: transactionStatus,
+            transactionId: vnpayResponse.transactionId,
+            providerData: {
+              bankCode: vnpayResponse.bankCode,
+              bankTranNo: vnpayResponse.bankTranNo,
+              cardType: vnpayResponse.cardType,
+              payDate: vnpayResponse.payDate,
+              responseCode: vnpayResponse.responseCode,
+              errorMessage: errorMessage,
+              isValidSignature: vnpayResponse.isValidSignature,
+            },
+            errorMessage:
+              transactionStatus === TransactionStatus.FAILED
+                ? errorMessage
+                : null,
+          },
+        });
+      }
+    } else if (order.payment) {
+      await this.prisma.paymentTransaction.create({
         data: {
-          status: transactionStatus,
+          paymentId: order.payment.id,
           transactionId: vnpayResponse.transactionId,
+          status: transactionStatus,
+          amount: order.payment.amount,
+          currency: 'VND',
+          paymentMethod: PaymentMethod.VNPAY,
+          provider: 'VNPAY',
           providerData: {
             bankCode: vnpayResponse.bankCode,
             bankTranNo: vnpayResponse.bankTranNo,
