@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import {
@@ -13,32 +14,42 @@ import {
 } from './dto/pagination-review.dto';
 import { ReviewResponseDto } from './dto/review-response.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
-import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class ReviewService {
-  constructor(
-    private prisma: PrismaService,
-  ) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(
     userId: string,
-    createReviewDto: CreateReviewDto,
+    payload: CreateReviewDto,
   ): Promise<ReviewResponseDto> {
-    const product = await this.prisma.product.findUnique({
-      where: { id: createReviewDto.productId },
-    });
-
-    if (!product) {
-      throw new NotFoundException('Sản phẩm không tồn tại');
-    }
-
-    const existingReview = await this.prisma.review.findFirst({
+    const orderItem = await this.prisma.orderItem.findFirst({
       where: {
-        userId: userId,
-        productId: createReviewDto.productId,
+        order: {
+          userId: userId,
+          status: OrderStatus.SUCCESS,
+        },
+        productId: payload.productId,
+      },
+      include: {
+        product: {
+          include: {
+            reviews: {
+              where: {
+                userId: userId,
+              },
+              take: 1,
+            },
+          },
+        },
       },
     });
+
+    if (!orderItem) {
+      throw new NotFoundException('Bạn chưa mua sản phẩm này');
+    }
+
+    const existingReview = orderItem.product.reviews[0];
 
     if (existingReview) {
       throw new ForbiddenException('Bạn đã đánh giá sản phẩm này rồi');
@@ -47,11 +58,10 @@ export class ReviewService {
     const review = await this.prisma.review.create({
       data: {
         userId: userId,
-        productId: createReviewDto.productId,
-        rating: createReviewDto.rating,
-        title: createReviewDto.title,
-        comment: createReviewDto.comment,
-        images: createReviewDto.images || [],
+        productId: payload.productId,
+        rating: payload.rating,
+        comment: payload.comment,
+        images: payload.images || [],
       },
       include: {
         user: {
@@ -63,27 +73,36 @@ export class ReviewService {
       },
     });
 
+    const newStar = (orderItem.product.star * orderItem.product.reviews.length + payload.rating) / (orderItem.product.reviews.length + 1);
+
+    const product = await this.prisma.product.update({
+      where: { id: payload.productId },
+      data: {
+        star: newStar,
+      },
+    });
+
     return this.mapToResponseDto(review);
   }
 
   async findAll(payload: ReviewFilterDto = {}): Promise<ReviewListResponseDto> {
     const {
       productId,
-      rating,
       sortBy = ReviewSortField.CREATED_AT,
       sortOrder = SortOrder.DESC,
     } = payload;
 
-    const currentPage = Number(payload.currentPage);
-    const pageSize = Number(payload.pageSize);
+    const currentPage = Number(payload.currentPage) || 1;
+    const pageSize = Number(payload.pageSize) || 10;
+    const rating = Number(payload.rating);
     const skip = (currentPage - 1) * pageSize;
 
-    const where: any = { isPublished: true };
+    const where: any = {};
     if (productId) {
       where.productId = productId;
     }
     if (rating) {
-      where.rating = rating;
+      where.rating = Number(rating);
     }
 
     const [reviews, totalItems] = await Promise.all([
@@ -101,7 +120,7 @@ export class ReviewService {
         orderBy: {
           [sortBy]: sortOrder,
         },
-        skip: (currentPage - 1) * pageSize,
+        skip,
         take: pageSize,
       }),
       this.prisma.review.count({ where }),
@@ -158,6 +177,14 @@ export class ReviewService {
             name: true,
           },
         },
+        product: {
+          select: {
+            id: true,
+            name: true,
+            images: true,
+            basePrice: true,
+          },
+        },
       },
     });
 
@@ -175,6 +202,9 @@ export class ReviewService {
   ): Promise<ReviewResponseDto> {
     const review = await this.prisma.review.findUnique({
       where: { id },
+      include: {
+        product: true,
+      },
     });
 
     if (!review) {
@@ -188,8 +218,6 @@ export class ReviewService {
     const updatedReview = await this.prisma.review.update({
       where: { id },
       data: {
-        rating: updateReviewDto.rating || review.rating,
-        title: updateReviewDto.title || review.title,
         comment: updateReviewDto.comment || review.comment,
         images: updateReviewDto.images || review.images,
         updatedAt: new Date(),
@@ -210,6 +238,9 @@ export class ReviewService {
   async remove(id: string, userId: string): Promise<void> {
     const review = await this.prisma.review.findUnique({
       where: { id },
+      include: {
+        product: true,
+      },
     });
 
     if (!review) {
@@ -227,23 +258,24 @@ export class ReviewService {
 
   async findUserReviews(
     userId: string,
-    filter: ReviewFilterDto = {},
+    payload: ReviewFilterDto = {},
   ): Promise<ReviewListResponseDto> {
+
+    const currentPage = Number(payload.currentPage);
+    const pageSize = Number(payload.pageSize);
+    const skip = (currentPage - 1) * pageSize;
     const {
       productId,
-      rating,
       sortBy = ReviewSortField.CREATED_AT,
       sortOrder = SortOrder.DESC,
-      currentPage = 1,
-      pageSize = 10,
-    } = filter;
+    } = payload;
 
     const where: any = { userId };
     if (productId) {
       where.productId = productId;
     }
-    if (rating) {
-      where.rating = rating;
+    if (payload.rating) {
+      where.rating = Number(payload.rating);
     }
 
     const [reviews, totalItems] = await Promise.all([
@@ -267,7 +299,7 @@ export class ReviewService {
         orderBy: {
           [sortBy]: sortOrder,
         },
-        skip: (currentPage - 1) * pageSize,
+        skip,
         take: pageSize,
       }),
       this.prisma.review.count({ where }),
@@ -321,19 +353,19 @@ export class ReviewService {
       title: review.title,
       comment: review.comment,
       images: review.images,
-      isPublished: review.isPublished,
       user: review.user
         ? {
-            id: review.user.id,
-            name: review.user.name,
-          }
+          id: review.user.id,
+          name: review.user.name,
+        }
         : undefined,
       product: review.product
         ? {
-            id: review.product.id,
-            name: review.product.name,
-            image: review.product.images[0] || null,
-          }
+          id: review.product.id,
+          name: review.product.name,
+          image: review.product.images[0] || null,
+          basePrice: review.product.basePrice,
+        }
         : undefined,
       createdAt: review.createdAt,
       updatedAt: review.updatedAt,

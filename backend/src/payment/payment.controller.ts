@@ -8,7 +8,6 @@ import {
   Param,
   Patch,
   Post,
-  Query,
   Req,
 } from '@nestjs/common';
 import {
@@ -16,7 +15,6 @@ import {
   ApiBody,
   ApiOperation,
   ApiParam,
-  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -24,9 +22,6 @@ import { UserRole } from '@prisma/client';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { HandleVnpayReturnDto } from './dto/handle-vnpay-return.dto';
 import { PaymentResponseDto } from './dto/payment-response.dto';
-import { VnpayIpnDto } from './dto/vnpay-ipn.dto';
-import { VnpayQueryDrDto } from './dto/vnpay-query-dr.dto';
-import { VnpayRefundDto } from './dto/vnpay-refund.dto';
 import { VnpayPaymentResponseDto } from './dto/vnpay-response.dto';
 import { PaymentService } from './payment.service';
 import { VnpayService } from './vnpay.service';
@@ -65,11 +60,11 @@ export class PaymentController {
     description: 'Không tìm thấy đơn hàng',
   })
   create(
-    @Body() createPaymentDto: CreatePaymentDto,
+    @Body() payload: CreatePaymentDto,
     @Req() req: Request,
   ): Promise<PaymentResponseDto> {
-    const userId = req['user']?.id;
-    return this.paymentService.create(createPaymentDto, userId);
+    const { id: userId } = req['user'];
+    return this.paymentService.create(payload, userId);
   }
 
   @Get('order/:orderId')
@@ -92,12 +87,10 @@ export class PaymentController {
   })
   findByOrderId(
     @Param('orderId') orderId: string,
-    @Req() req: any,
+    @Req() req: Request,
   ): Promise<PaymentResponseDto> {
     return this.paymentService.findByOrderId(orderId);
   }
-
-
 
   // -----------------------------------------
   // API XỬ LÝ WEBHOOKS VNPAY
@@ -146,7 +139,7 @@ export class PaymentController {
   })
   findOne(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: Request,
   ): Promise<PaymentResponseDto> {
     return this.paymentService.findOne(id);
   }
@@ -178,7 +171,7 @@ export class PaymentController {
   //     );
   //   }
   //   return this.paymentService.handleVnpayIpn(body);
-  // } 
+  // }
 
   // // -----------------------------------------
   // // API QUẢN LÝ THANH TOÁN (ADMIN/MANAGER)

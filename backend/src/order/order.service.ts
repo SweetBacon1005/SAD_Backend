@@ -1,5 +1,7 @@
+import { NotificationGateway } from '@/notification/notification.gateway';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,9 +10,9 @@ import {
   PaymentMethod,
   PaymentStatus,
   TransactionStatus,
+  UserRole,
 } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
-import { NotificationService } from '../notification/notification.service';
 import { VoucherService } from '../voucher/voucher.service';
 import {
   CancelOrderResponseDto,
@@ -18,10 +20,11 @@ import {
   OrderStatusResponseDto,
   PaymentStatusResponseDto,
 } from './dto/order-response.dto';
-import { CreateOrderDto } from './dto/order.dto';
-import { PagedResponseDto, PaginationDto } from './dto/pagination.dto';
-import { NotificationGateway } from '@/notification/notification.gateway';
-import { get } from 'http';
+import {
+  CreateOrderDto,
+  GetAllOrderDto,
+  GetAllOrderResponseDto,
+} from './dto/order.dto';
 
 interface ProductVariant {
   id: string;
@@ -60,7 +63,6 @@ export class OrderService {
       throw new BadRequestException('Phương thức thanh toán không hợp lệ');
     }
 
-    // Kiểm tra các phương thức thanh toán đang được hỗ trợ
     const supportedPaymentMethods = [PaymentMethod.COD, PaymentMethod.VNPAY];
 
     if (!supportedPaymentMethods.includes(paymentMethod)) {
@@ -120,7 +122,6 @@ export class OrderService {
     userId: string,
     payload: CreateOrderDto,
   ): Promise<OrderResponseDto> {
-    // Validate payment method
     this.validatePaymentMethod(payload.paymentMethod);
 
     return this.prisma.$transaction(async (prisma) => {
@@ -133,7 +134,7 @@ export class OrderService {
                 include: {
                   product: true,
                 },
-              }
+              },
             },
           },
         },
@@ -149,7 +150,7 @@ export class OrderService {
           isActive: true,
           startDate: { lte: currentDate },
           endDate: { gte: currentDate },
-          applicableFor: "SPECIFIC_PRODUCTS",
+          applicableFor: 'SPECIFIC_PRODUCTS',
         },
       });
 
@@ -181,13 +182,14 @@ export class OrderService {
             const product = variant.product as Product;
 
             if (!product) {
-              throw new NotFoundException(
-                `Không tìm thấy sản phẩm với ID`,
-              );
+              throw new NotFoundException(`Không tìm thấy sản phẩm với ID`);
             }
 
             return {
-              product: {...product, discount: this.getBestDiscount(product.id, vouchers)},
+              product: {
+                ...product,
+                discount: this.getBestDiscount(product.id, vouchers),
+              },
               cartItem,
               quantity: item.quantity,
               selectedVariant: variant,
@@ -222,7 +224,10 @@ export class OrderService {
             }
 
             return {
-              product: {...variant.product, discount: this.getBestDiscount(variant.product.id, vouchers)},
+              product: {
+                ...variant.product,
+                discount: this.getBestDiscount(variant.product.id, vouchers),
+              },
               quantity: item.quantity,
               selectedVariant: variant,
             };
@@ -242,7 +247,9 @@ export class OrderService {
         const product = productInfo?.product;
         const selectedVariant = productInfo?.selectedVariant;
         const quantity = item.quantity || 1;
-        const price = selectedVariant.price * (1 - (productInfo?.product.discount || 0) / 100);
+        const price =
+          selectedVariant.price *
+          (1 - (productInfo?.product.discount || 0) / 100);
         subtotal += price * quantity;
 
         return {
@@ -367,7 +374,7 @@ export class OrderService {
                 quantity: { decrement: quantity },
               },
             });
-          } 
+          }
         }),
       );
 
@@ -391,8 +398,8 @@ export class OrderService {
   }
 
   async getAllOrders(
-    payload: PaginationDto,
-  ): Promise<PagedResponseDto<OrderResponseDto>> {
+    payload: GetAllOrderDto,
+  ): Promise<GetAllOrderResponseDto<OrderResponseDto>> {
     const page = Number(payload.currentPage) || 1;
     const limit = Number(payload.pageSize) || 10;
     const skip = (page - 1) * limit;
@@ -436,11 +443,11 @@ export class OrderService {
 
   async getUserOrders(
     userId: string,
-    payload: PaginationDto,
-  ): Promise<PagedResponseDto<OrderResponseDto>> {
-    const page = Number(payload.currentPage) || 1;
-    const limit = Number(payload.pageSize) || 10;
-    const skip = (page - 1) * limit;
+    payload: GetAllOrderDto,
+  ): Promise<GetAllOrderResponseDto<OrderResponseDto>> {
+    const currentPage = Number(payload.currentPage) || 1;
+    const pageSize = Number(payload.pageSize) || 10;
+    const skip = (currentPage - 1) * pageSize;
 
     const [orders, totalItems] = await Promise.all([
       this.prisma.order.findMany({
@@ -458,18 +465,18 @@ export class OrderService {
           createdAt: 'desc',
         },
         skip,
-        take: limit,
+        take: pageSize,
       }),
       this.prisma.order.count({
         where: { userId },
       }),
     ]);
 
-    const totalPages = Math.ceil(totalItems / limit);
+    const totalPages = Math.ceil(totalItems / pageSize);
 
     return {
       data: orders as unknown as OrderResponseDto[],
-      currentPage: page,
+      currentPage: currentPage,
       totalPages,
       total: totalItems,
     };
@@ -506,6 +513,8 @@ export class OrderService {
   async updateOrderStatus(
     id: string,
     status: OrderStatus,
+    role: UserRole,
+    userId: string,
   ): Promise<OrderStatusResponseDto> {
     const order = await this.prisma.order.findUnique({
       where: { id },
@@ -516,27 +525,31 @@ export class OrderService {
     });
 
     if (!order) {
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException('Không tìm thấy đơn hàng');
     }
 
-    if (
-      order.status === OrderStatus.CANCELLED &&
-      status !== OrderStatus.CANCELLED
-    ) {
-      throw new BadRequestException(
-        'Cannot change status of a cancelled order',
-      );
+    if (role !== UserRole.ADMIN && order.userId !== userId) {
+      throw new ForbiddenException('Bạn không có quyền thay đổi trạng thái đơn hàng');
     }
 
-    if (
-      order.status === OrderStatus.DELIVERED &&
-      status !== OrderStatus.DELIVERED &&
-      status !== OrderStatus.CANCELLED
-    ) {
-      throw new BadRequestException(
-        'Cannot change status of a delivered order except to cancelled',
-      );
-    }
+    // if (
+    //   order.status === OrderStatus.CANCELLED &&
+    //   status !== OrderStatus.CANCELLED
+    // ) {
+    //   throw new BadRequestException(
+    //     'Không thể thay đổi trạng thái đơn hàng đã bị hủy',
+    //   );
+    // }
+
+    // if (
+    //   order.status === OrderStatus.DELIVERED &&
+    //   status !== OrderStatus.DELIVERED &&
+    //   status !== OrderStatus.CANCELLED
+    // ) {
+    //   throw new BadRequestException(
+    //     'Không thể thay đổi trạng thái đơn hàng đã được giao',
+    //   );
+    // }
 
     let updateData: any = { status };
 
@@ -639,10 +652,13 @@ export class OrderService {
     };
   }
 
-  async cancelOrder(id: string): Promise<CancelOrderResponseDto> {
+  async cancelOrder(
+    id: string,
+    userId: string,
+  ): Promise<CancelOrderResponseDto> {
     return this.prisma.$transaction(async (prisma) => {
       const order = await prisma.order.findUnique({
-        where: { id },
+        where: { id, userId },
         include: {
           items: true,
           user: true,

@@ -1,10 +1,8 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
   HttpStatus,
-  NotFoundException,
   Param,
   Post,
   Put,
@@ -31,14 +29,8 @@ import {
   OrderStatusResponseDto,
   PaymentStatusResponseDto,
 } from './dto/order-response.dto';
-import { CreateOrderDto } from './dto/order.dto';
-import { PagedResponseDto, PaginationDto } from './dto/pagination.dto';
+import { CreateOrderDto, GetAllOrderDto, GetAllOrderResponseDto } from './dto/order.dto';
 import { OrderService } from './order.service';
-
-interface RequestUser {
-  id: string;
-  role: UserRole;
-}
 
 @ApiTags('orders')
 @ApiBearerAuth()
@@ -63,12 +55,12 @@ export class OrderController {
   })
   @ApiOkResponse({
     description: 'Danh sách đơn hàng đã tìm thấy',
-    type: PagedResponseDto,
+    type: GetAllOrderResponseDto,
   })
   async getAllOrders(
-    @Query() pagination: PaginationDto,
-  ): Promise<PagedResponseDto<OrderResponseDto>> {
-    return this.orderService.getAllOrders(pagination);
+    @Query() payload: GetAllOrderDto,
+  ): Promise<GetAllOrderResponseDto<OrderResponseDto>> {
+    return this.orderService.getAllOrders(payload);
   }
 
   @Get('my-orders')
@@ -89,14 +81,14 @@ export class OrderController {
   })
   @ApiOkResponse({
     description: 'Danh sách đơn hàng đã tìm thấy',
-    type: PagedResponseDto,
+    type: GetAllOrderResponseDto,
   })
   async getUserOrders(
-    @Request() req,
-    @Query() pagination: PaginationDto,
-  ): Promise<PagedResponseDto<OrderResponseDto>> {
-    const user = req.user as RequestUser;
-    return this.orderService.getUserOrders(user.id, pagination);
+    @Req() req: Request,
+    @Query() payload: GetAllOrderDto,
+  ): Promise<GetAllOrderResponseDto<OrderResponseDto>> {
+    const { id: userId } = req['user'];
+    return this.orderService.getUserOrders(userId, payload);
   }
 
   @Get(':id')
@@ -112,27 +104,10 @@ export class OrderController {
   })
   async getOrderById(
     @Param('id') id: string,
-    @Request() req,
+    @Req() req: Request,
   ): Promise<OrderResponseDto> {
-    try {
-      const user = req.user as RequestUser;
-      if (user.role === UserRole.ADMIN) {
-        const order = await this.orderService.getOrderById(id, user.id);
-        return order;
-      }
-
-      return await this.orderService.getOrderById(id, user.id);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        const user = req.user as RequestUser;
-        throw new NotFoundException(
-          user.role === UserRole.ADMIN
-            ? 'Order not found'
-            : 'Order not found or you do not have permission to access it',
-        );
-      }
-      throw error;
-    }
+    const { id: userId } = req['user'];
+    return this.orderService.getOrderById(id, userId);
   }
 
   @Post('check-voucher')
@@ -179,10 +154,11 @@ export class OrderController {
   async checkVoucher(
     @Body()
     data: { voucherId: string; orderTotal: number; productIds?: string[] },
-    @Req() req,
+    @Req() req: Request,
   ) {
+    const { id: userId } = req['user'];
     return await this.orderService.checkVoucher(
-      req.user.id,
+      userId,
       data.voucherId,
       data.orderTotal,
       data.productIds,
@@ -194,8 +170,9 @@ export class OrderController {
   @ApiOperation({ summary: 'Tạo đơn hàng mới' })
   @ApiBody({ type: CreateOrderDto })
   @ApiResponse({ status: 201, description: 'Đơn hàng được tạo thành công' })
-  async createOrder(@Body() createOrderDto: CreateOrderDto, @Req() req) {
-    return this.orderService.createOrder(req.user.id, createOrderDto);
+  async createOrder(@Body() createOrderDto: CreateOrderDto, @Req() req: Request) {
+    const { id: userId } = req['user'];
+    return this.orderService.createOrder(userId, createOrderDto);
   }
 
   @Post('from-cart')
@@ -205,20 +182,15 @@ export class OrderController {
     type: OrderResponseDto,
   })
   async createOrderFromCart(
-    @Request() req,
+    @Req() req: Request,
     @Body() createOrderDto: CreateOrderDto,
   ): Promise<OrderResponseDto> {
-    const user = req.user as RequestUser;
-    // if (!createOrderDto.items.some((item) => item.cartItemId)) {
-    //   throw new BadRequestException(
-    //     'Cần cung cấp ít nhất một cartItemId để đặt hàng từ giỏ hàng',
-    //   );
-    // }
-    return this.orderService.createOrder(user.id, createOrderDto);
+    const { id: userId } = req['user'];
+    return this.orderService.createOrder(userId, createOrderDto);
   }
 
   @Put(':id/status')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.CUSTOMER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Cập nhật trạng thái đơn hàng (Admin)' })
   @ApiParam({ name: 'id', description: 'ID đơn hàng' })
   @ApiBody({
@@ -248,8 +220,10 @@ export class OrderController {
   async updateOrderStatus(
     @Param('id') id: string,
     @Body('status') status: OrderStatus,
+    @Req() req: Request,
   ): Promise<OrderStatusResponseDto> {
-    return this.orderService.updateOrderStatus(id, status);
+    const { role, id: userId } = req['user'];
+    return this.orderService.updateOrderStatus(id, status, role, userId);
   }
 
   @Put(':id/payment')
@@ -285,21 +259,9 @@ export class OrderController {
   })
   async cancelOrder(
     @Param('id') id: string,
-    @Request() req: Request,
+    @Req() req: Request,
   ): Promise<CancelOrderResponseDto> {
-    try {
-      const user = req['user'];
-      if (user.role !== UserRole.ADMIN) {
-        await this.orderService.getOrderById(id, user.id);
-      }
-      return this.orderService.cancelOrder(id);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw new NotFoundException(
-          'Order not found or you do not have permission to cancel it',
-        );
-      }
-      throw error;
-    }
+    const { id: userId } = req['user'];
+    return this.orderService.cancelOrder(id, userId);
   }
 }

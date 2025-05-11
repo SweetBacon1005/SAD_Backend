@@ -6,6 +6,7 @@ import {
   IsArray,
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Min,
@@ -162,3 +163,56 @@ export class OrderIdParamDto {
   @IsString()
   id: string;
 }
+
+export class GetAllOrderDto {
+  @ApiPropertyOptional({
+    description: 'Trang hiện tại',
+    example: 1,
+    default: 1,
+    minimum: 1
+  })
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  @Type(() => Number)
+  currentPage?: number;
+
+  @ApiPropertyOptional({
+    description: 'Số mục trên mỗi trang',
+    example: 10,
+    default: 10,
+    minimum: 1
+  })
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  @Type(() => Number)
+  pageSize?: number;
+}
+
+export class GetAllOrderResponseDto<T> {
+  @ApiProperty({
+    description: 'Danh sách dữ liệu',
+    isArray: true,
+  })
+  data: T[];
+
+  @ApiProperty({
+    description: 'Trang hiện tại',
+    example: 1,
+  })
+  currentPage: number;
+
+  @ApiProperty({
+    description: 'Tổng số trang',
+    example: 5,
+  })
+  totalPages: number;
+
+  @ApiProperty({
+    description: 'Tổng số kết quả',
+    example: 45,
+  })
+  total: number;
+}
+
