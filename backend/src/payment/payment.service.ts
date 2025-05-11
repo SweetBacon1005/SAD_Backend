@@ -20,6 +20,7 @@ import { CreatePaymentTransactionDto } from './dto/payment-transaction.dto';
 import { VnpayIpnDto } from './dto/vnpay-ipn.dto';
 import { VnpayPaymentResponseDto } from './dto/vnpay-response.dto';
 import { VnpayService } from './vnpay.service';
+import { MailService } from '../mail/mail.service'; // Thêm dòng này
 
 @Injectable()
 export class PaymentService {
@@ -30,6 +31,7 @@ export class PaymentService {
     private prisma: PrismaService,
     private vnpayService: VnpayService,
     private notificationGateway: NotificationGateway,
+    private mailService: MailService, // Thêm dòng này
   ) {
     this.FRONTEND_URL = FRONTEND_URL;
   }
@@ -67,6 +69,25 @@ export class PaymentService {
   }
 
   private currentOrderTotal: number = 0;
+
+  // Hàm định dạng ngày từ VNPay (từ yyyyMMddHHmmss sang định dạng thân thiện)
+  private formatVnpayDate(vnpayDate: string): string {
+    if (!vnpayDate || vnpayDate.length !== 14) {
+      return new Date().toLocaleDateString('vi-VN');
+    }
+
+    try {
+      const year = vnpayDate.substring(0, 4);
+      const month = vnpayDate.substring(4, 6);
+      const day = vnpayDate.substring(6, 8);
+      const hour = vnpayDate.substring(8, 10);
+      const minute = vnpayDate.substring(10, 12);
+      
+      return `${day}/${month}/${year} ${hour}:${minute}`;
+    } catch (error) {
+      return new Date().toLocaleDateString('vi-VN');
+    }
+  }
 
   async create(
     payload: CreatePaymentDto,
@@ -275,6 +296,13 @@ export class PaymentService {
         },
       });
 
+      // Lấy thông tin người dùng để gửi email
+      const user = await this.prisma.user.findUnique({
+        where: { id: order.userId },
+        select: { email: true, name: true },
+      });
+
+      // Gửi thông báo qua gateway
       await this.notificationGateway.sendNotification(order.userId, {
         type: 'PAYMENT_STATUS',
         title: 'Thanh toán thành công',
@@ -285,7 +313,40 @@ export class PaymentService {
           amount: order.payment?.amount,
           transactionId: vnpayResponse.transactionId,
         },
-      });
+      });      // Gửi email xác nhận thanh toán thành công
+      try {
+        
+        const paymentDate = vnpParams.vnp_PayDate 
+          ? this.formatVnpayDate(vnpParams.vnp_PayDate)
+          : new Date().toLocaleDateString('vi-VN', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+
+        // Đơn vị tiền VNPay trả về là VND x 100, cần chia cho 100
+        const amount = parseInt(vnpParams.vnp_Amount) / 100;
+        
+        // Email cố định cho mục đích demo
+        const demoEmail = 'nguyenvanduc2.384@gmail.com';
+        
+        await this.mailService.sendPaymentInvoiceEmail(
+          demoEmail,
+          user?.name || 'Quý khách',
+          orderId,
+          amount,
+          vnpParams.vnp_BankCode ? `VNPAY (${vnpParams.vnp_BankCode})` : "VNPAY",
+          paymentDate,
+          vnpParams.vnp_TransactionNo || vnpayResponse.transactionId
+        );
+
+        this.logger.log(`Payment confirmation email sent to ${demoEmail} for order ${orderId}`);
+      } catch (error) {
+        
+        this.logger.error(`Failed to send payment confirmation email: ${error.message}`, error.stack);
+      }
     } else {
       paymentStatus = PaymentStatus.FAILED;
       transactionStatus = TransactionStatus.FAILED;

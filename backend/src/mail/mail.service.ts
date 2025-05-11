@@ -136,4 +136,27 @@ export class MailService {
       },
     });
   }
+  async sendPaymentInvoiceEmail(
+    email: string, 
+    name: string,
+    orderId: string,
+    amount: number,
+    paymentMethod: string,
+    paymentDate: string,
+    transactionId?: string,
+  ): Promise<void> {
+    await this.sendMail({
+      to: email,
+      subject: 'Thanh Toán Thành Công',
+      template: 'payment-success',
+      context: {
+        name,
+        orderId,
+        amount: amount.toLocaleString('vi-VN'),
+        paymentMethod,
+        paymentDate,
+        transactionId,
+      },
+    });
+  }
 }
